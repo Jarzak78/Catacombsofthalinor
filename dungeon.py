@@ -1,0 +1,164 @@
+"""Generate and reveal a connected, seedable dungeon."""
+
+from collections import deque
+import random
+
+from loot_library import TREASURE_BUNDLES
+from room import Room
+from room_library import ENTRANCE, ROOM_FLAVORS, SANCTUM, make_enemy, make_warden
+
+
+DIRECTION_OFFSETS = {
+    "north": (0, -1),
+    "east": (1, 0),
+    "south": (0, 1),
+    "west": (-1, 0),
+}
+OPPOSITE_DIRECTION = {
+    "north": "south",
+    "east": "west",
+    "south": "north",
+    "west": "east",
+}
+
+
+class Dungeon:
+    width = 4
+    height = 3
+    start = (0, 0)
+    boss_position = (3, 2)
+
+    def __init__(self, rng: random.Random) -> None:
+        self.rooms: dict[tuple[int, int], Room] = {}
+        self._create_rooms(rng)
+        self._connect_rooms(rng)
+        self._place_contents(rng)
+
+    def _create_rooms(self, rng: random.Random) -> None:
+        flavors = list(ROOM_FLAVORS)
+        rng.shuffle(flavors)
+        for y in range(self.height):
+            for x in range(self.width):
+                position = (x, y)
+                if position == self.start:
+                    name, description = ENTRANCE
+                elif position == self.boss_position:
+                    name, description = SANCTUM
+                else:
+                    name, description = flavors.pop()
+                self.rooms[position] = Room(position, name, description, {})
+
+    def _neighbors(self, position: tuple[int, int]):
+        x, y = position
+        for direction, (dx, dy) in DIRECTION_OFFSETS.items():
+            destination = (x + dx, y + dy)
+            if destination in self.rooms:
+                yield direction, destination
+
+    def _link(self, origin: tuple[int, int], direction: str, destination: tuple[int, int]) -> None:
+        self.rooms[origin].exits[direction] = destination
+        self.rooms[destination].exits[OPPOSITE_DIRECTION[direction]] = origin
+
+    def _connect_rooms(self, rng: random.Random) -> None:
+        # Build all ordinary routes first so the boss cannot block exploration.
+        reached = {self.start}
+        stack = [self.start]
+        while stack:
+            current = stack[-1]
+            choices = [
+                (direction, destination)
+                for direction, destination in self._neighbors(current)
+                if destination not in reached and destination != self.boss_position
+            ]
+            if not choices:
+                stack.pop()
+                continue
+            direction, destination = rng.choice(choices)
+            self._link(current, direction, destination)
+            reached.add(destination)
+            stack.append(destination)
+
+        # A few additional passages let explorers circle around and backtrack.
+        missing_links = [
+            (position, direction, destination)
+            for position in self.rooms
+            for direction, destination in self._neighbors(position)
+            if position != self.boss_position
+            and destination != self.boss_position
+            and direction in ("east", "south")
+            and direction not in self.rooms[position].exits
+        ]
+        rng.shuffle(missing_links)
+        for origin, direction, destination in missing_links[:2]:
+            self._link(origin, direction, destination)
+
+        # The final chamber is a terminal branch, never a route to other rooms.
+        direction, destination = rng.choice(list(self._neighbors(self.boss_position)))
+        self._link(self.boss_position, direction, destination)
+
+    def _place_contents(self, rng: random.Random) -> None:
+        positions = [
+            position for position in self.rooms
+            if position not in (self.start, self.boss_position)
+        ]
+        rng.shuffle(positions)
+
+        # Place the runeblade in a nearest room, giving every run an early upgrade.
+        distances = {self.start: 0}
+        frontier = deque([self.start])
+        while frontier:
+            position = frontier.popleft()
+            for destination in self.rooms[position].exits.values():
+                if destination not in distances:
+                    distances[destination] = distances[position] + 1
+                    frontier.append(destination)
+        weapon_position = min(positions, key=distances.__getitem__)
+        positions.remove(weapon_position)
+        self.rooms[weapon_position].loot = TREASURE_BUNDLES[-1]
+
+        treasures = list(TREASURE_BUNDLES[:-1])
+        rng.shuffle(treasures)
+        for position, treasure in zip(positions[:3], treasures):
+            self.rooms[position].loot = treasure
+        for position in positions[3:]:
+            self.rooms[position].enemy = make_enemy(rng)
+        self.rooms[self.boss_position].enemy = make_warden()
+
+    def get_room(self, position: tuple[int, int]) -> Room:
+        return self.rooms[position]
+
+    def map_lines(self, current_position: tuple[int, int]) -> list[str]:
+        """Render visited rooms and passages; preserve mystery in unseen rooms."""
+        self.get_room(current_position)  # Reject invalid map positions consistently.
+        lines = []
+        for y in range(self.height):
+            room_line = []
+            passage_line = []
+            for x in range(self.width):
+                position = (x, y)
+                room = self.rooms[position]
+                if position == current_position:
+                    marker = "@"
+                elif not room.visited:
+                    marker = "?"
+                elif room.enemy and room.enemy.is_alive:
+                    marker = "B" if room.enemy.boss else "E"
+                elif room.loot and not room.looted:
+                    marker = "$"
+                else:
+                    marker = "."
+                room_line.append(marker)
+                if x < self.width - 1:
+                    east = self.rooms[(x + 1, y)]
+                    visible = room.visited or east.visited or position == current_position or east.position == current_position
+                    room_line.append("---" if visible and "east" in room.exits else "   ")
+                if y < self.height - 1:
+                    south = self.rooms[(x, y + 1)]
+                    visible = room.visited or south.visited or position == current_position or south.position == current_position
+                    passage_line.append("|" if visible and "south" in room.exits else " ")
+                    if x < self.width - 1:
+                        passage_line.append("   ")
+            lines.append("".join(room_line).rstrip())
+            if y < self.height - 1:
+                lines.append("".join(passage_line).rstrip())
+        return lines
