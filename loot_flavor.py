@@ -346,3 +346,37 @@ def preview_description(room: Room, floor: int) -> str:
     return _PREVIEWS.get(floor, {}).get(
         room.name, "A cache rests in a cracked stone recess."
     )
+
+
+def loot_clue_description(room: Room) -> str:
+    """Hint at visible treasure without revealing quantities or enchantments."""
+    loot = room.loot
+    clues = []
+    if loot is not None:
+        if loot.gold:
+            clues.append("a faint metallic glimmer")
+        if loot.potions:
+            clues.append("the glint of stoppered glass")
+        if loot.weapon_name:
+            clues.append("a gleaming longsword" if "longsword" in loot.weapon_name.lower()
+                         else "the outline of an old weapon")
+    if not clues:
+        return "Something here may be worth a closer search. Type 'loot' to investigate."
+    if len(clues) == 1:
+        details = clues[0]
+    elif len(clues) == 2:
+        details = " and ".join(clues)
+    else:
+        details = ", ".join(clues[:-1]) + ", and " + clues[-1]
+    return f"Among the dusty belongings, you glimpse {details}. Type 'loot' to search them."
+
+
+def weapon_discovery_description(name: str, bonus: int) -> str:
+    """Identify a searched weapon and describe its actual mechanical bonus."""
+    if "sword" in name.lower():
+        detail = "Its steel blade remains keen above a weathered leather grip."
+    else:
+        detail = "Dust falls from an old weapon scarred by forgotten battles."
+    if bonus:
+        detail += " Fine runes glow faintly as you turn it in the lantern light."
+    return f"You uncover {name}. {detail} Weapon bonus: +{bonus} to attack and damage."

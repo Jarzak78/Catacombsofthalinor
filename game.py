@@ -5,7 +5,10 @@ from actions import Action
 from battle_flavor import hit_description, miss_description
 from campaign import FLOORS, stock
 from lore_notes import LoreNote
-from loot_flavor import discovery_description, preview_description
+from loot_flavor import (
+    discovery_description, loot_clue_description, preview_description,
+    weapon_discovery_description,
+)
 import random
 
 from combat import AttackResult, roll_attack, roll_initiative, roll_dice
@@ -46,7 +49,7 @@ spending at one die. Plain 'rest' spends dice until healed or out of dice.
 Long rests restore HP and all resources.
 At 0 HP you are unconscious: 'end' lets combat and death saves continue.
 Hostile rooms show combat only. After victory, use 'look' to examine the room.
-In a safe room, 'look' describes unclaimed loot; 'loot' collects it.
+In a safe room, 'look' hints at loot; 'loot' reveals exact items and collects them.
 Collect treasure with 'loot'. Defeat each guardian, then use 'portal' to shop."""
 
 ALIASES = {
@@ -136,14 +139,7 @@ class Game:
         if has_treasure or has_note:
             lines.append(preview_description(self.room, self.floor))
         if has_treasure:
-            contents = []
-            if loot.gold:
-                contents.append(f"{loot.gold} gold")
-            if loot.potions:
-                contents.append(f"{loot.potions} healing potion" + ("s" if loot.potions != 1 else ""))
-            if loot.weapon_name:
-                contents.append(f"{loot.weapon_name} (magic bonus +{loot.weapon_bonus})")
-            lines.append("Unclaimed loot: " + "; ".join(contents) + ". Type 'loot' to collect it.")
+            lines.append(loot_clue_description(self.room))
         if has_note:
             lines.append(f"You spot a document: {self.room.note.title}. Use 'loot' to collect it once the room is safe.")
         lines.append("Exits: " + ", ".join(self.room.exits))
@@ -625,8 +621,12 @@ class Game:
             self.player.gold += loot.gold
             self.player.potions += loot.potions
             lines.append(f"You collect {loot.gold} gold and {loot.potions} healing potion(s).")
-            if loot.weapon_name and self.player.equip_weapon(loot.weapon_name, loot.weapon_bonus):
-                lines.append(f"You equip {loot.weapon_name} (+{loot.weapon_bonus} to attack and damage).")
+            if loot.weapon_name:
+                lines.append(weapon_discovery_description(loot.weapon_name, loot.weapon_bonus))
+                if self.player.equip_weapon(loot.weapon_name, loot.weapon_bonus):
+                    lines.append("You equip the newly discovered weapon.")
+                else:
+                    lines.append(f"You keep using {self.player.weapon_name}; this find is no better.")
         note = self.room.note
         if note is not None and not self.room.note_collected:
             self.room.note_collected = True

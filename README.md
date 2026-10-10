@@ -55,16 +55,19 @@ exits, treasure, and documents wait until the fight is over. During combat,
 `look` keeps the same focused view. After victory, type `look` to examine the
 room and discover what you can collect.
 
-In a safe room, `look` also describes the hiding place and lists the exact
-unclaimed gold, potions, or equipment there. It previews your find without
-collecting or equipping anything; use `loot` to take it. Collected treasure
-disappears from later room previews, while uncollected documents remain visible.
+In a safe room, `look` describes the hiding place and gives vague clues such
+as a metallic glimmer, stoppered glass, or a gleaming longsword. Specific treasure
+names, quantities, and equipment bonuses are revealed when you use `loot`. Looking
+collects and equips nothing. Collected treasure disappears from later previews,
+while uncollected documents remain visible.
 
 Successful `loot` searches describe where you uncover the find: abandoned
 packs, burial chests, offerings, and other hiding places suited to each room
 and floor. Treasure and documents share one discovery description when found
 together. The following lines list exactly what you collect. Discovery prose
 lives in `loot_flavor.py` and consumes no random rolls.
+Found weapons receive a physical description, their exact name and attack/damage
+bonus, and an explanation of whether they replace your current weapon.
 
 ## Commands
 
