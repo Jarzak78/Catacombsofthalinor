@@ -58,6 +58,7 @@ treasure room always holds a magic longsword. Search with `loot` to claim it.
 | `loot` | Collect treasure and lore documents once the room is safe. |
 | `journal` | List your collected notes with journal numbers. |
 | `read`, `read 1`, `read <note id>` | Read the latest note, a numbered note, or a collected note by its id. |
+| `examine`, `inspect`, `examine foe` | Study your current foe's description, HP, AC, attacks, and tactical clues. |
 | `attack` / `a` | Use an action for a longsword attack. |
 | `dodge` / `d` | Use an action to impose Disadvantage on enemy attacks until your next turn. |
 | `disengage` / `flee` / `f` | Use an action and movement to retreat without an opportunity attack. |
@@ -78,12 +79,25 @@ Actions do **not** automatically end your turn. For example, you can
 `attack`, drink a `potion` as your bonus action, then `end`. At level 2 you
 can `attack`, `surge`, `attack`, and `end`. You get only one bonus action
 per turn, so Second Wind and a potion cannot both be used on that turn.
-Informational and invalid commands spend no actions.
+Other informational and invalid commands spend no actions. Examining a
+foe follows the opening-encounter rules below.
 
 ## Implemented 2024 combat rules
 
 - Initiative is `d20 + Dexterity modifier`, rolled when an encounter begins.
   The adventurer wins ties as this game's chosen DM ruling.
+- Winning initiative gives you a free `examine` before your first action
+  or the end of your opening turn. A bonus action or Action Surge does
+  not use up this chance. Otherwise, your first examination costs one
+  action. Once studied, you can examine that foe again for free during
+  the encounter. Examining rolls no dice and advances no time; you must
+  be conscious and fighting a foe.
+- If the monster wins initiative, it ambushes you. You automatically
+  make this game's **Perception save**: `d20 + Wisdom modifier` against
+  DC 12, currently `d20 + 1` without proficiency. Success lets its opening
+  strike proceed normally; failure gives that strike Advantage. Later
+  attacks get no ambush Advantage, and you do not lose a turn. Natural
+  1 and 20 have no special effect on this save. This is a house rule.
 - Attacks roll `d20 + Strength modifier + proficiency + magic weapon bonus`
   against Armor Class. Natural 1 always misses; natural 20 always hits.
   As a game house rule, a natural 1 also causes 1 HP of self-damage to
@@ -236,12 +250,14 @@ state = game.get_state()       # Redraw from the updated state
 ```
 
 Snapshots expose floor/scene, player equipment/resources, turn budgets,
+encounter initiative and examination availability,
 visited room descriptions/exits/enemies/loot, portal status, and vendor
 stock with stable item ids. Unvisited room contents are hidden. Reading a
 snapshot does not advance randomness or time; changing it cannot mutate
 the game. Coordinates identify rooms within the current floor. Text
 commands use the same `perform` path as future button or controller input.
 Floor themes and item definitions live separately in `campaign.py`.
+Future foe panels can use `Action("examine")` through the same engine.
 
 This prepares the engine for graphics and controls; graphics assets, a
 window renderer, animations, and controller bindings are future work.

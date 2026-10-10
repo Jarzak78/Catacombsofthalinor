@@ -9,12 +9,14 @@ import random
 
 from combat import AttackResult, roll_attack, roll_initiative, roll_dice
 from dungeon import Dungeon
+from enemy_lore import foe_details
 from player import Player
 from room import Enemy, Room
 from utils import health_bar
 
 
 HELP = """Explore: north/south/east/west (n/s/e/w), look, map, loot
+Foes: examine (free opening opportunity, otherwise one action; rereading is free)
 Lore: journal, read (latest note), read <journal number or note id>
 Actions: attack (a), dodge (d), disengage (flee/f)
 Bonus actions: potion (p), second wind (wind)
@@ -32,7 +34,11 @@ Dodge gives attacks against you Disadvantage until your next turn.
 Disengage spends an action and retreats without an opportunity attack.
 Potions heal 2d4+2; Second Wind heals 1d10 + fighter level.
 Each combat turn has an action and a bonus action. Type 'end' when done.
-Informational and invalid commands do not spend actions or advance combat.
+Other informational and invalid commands do not spend actions or advance combat.
+Winning initiative (including ties) lets you examine before your first action for free.
+If the monster acts first, roll a Perception save: d20 + Wisdom vs DC 12.
+Failure gives its opening attack Advantage; success means a normal attack.
+This ambush save is a house rule; it never skips your turn or causes fumble damage.
 Short rests recover one Second Wind use and Action Surge; an injured
 fighter can spend Hit Dice to heal. 'rest 0' saves your dice; 'rest 1' caps
 spending at one die. Plain 'rest' spends dice until healed or out of dice.
@@ -47,6 +53,7 @@ ALIASES = {
     "wind": "second wind", "surge": "action surge", "save": "end",
     "i": "inventory", "h": "help", "?": "help", "q": "quit",
     "short rest": "rest",
+    "inspect": "examine", "examine foe": "examine", "examine enemy": "examine",
 }
 DIRECTIONS = {"north", "south", "east", "west"}
 
@@ -73,6 +80,7 @@ class Game:
         self.dodging = False
         self.enemy_sapped = False
         self.round_number = 0
+        self.clear_encounter()
         self.elapsed_minutes = 0.0
         self.last_long_rest_end = -960.0
         self.won = False
@@ -119,6 +127,14 @@ class Game:
             lines.append(f"{enemy.name} blocks your way! HP {enemy.hp}/{enemy.max_hp}, "
                          f"AC {enemy.armor_class}.")
             lines.append("Attack, dodge, use a bonus action, or disengage; 'end' finishes your turn.")
+            if self.foe_examined:
+                lines.append("Type 'examine' to reread your observations for free.")
+            elif self.free_examine_available:
+                lines.append("Type 'examine' before your first action to study this foe for free.")
+            elif self.initiative_result is None:
+                lines.append("Initiative decides whether your opening examination is free.")
+            else:
+                lines.append("Type 'examine' to study this foe for one action.")
         elif self.room.enemy:
             lines.append(f"The defeated {self.room.enemy.name} lies still.")
         if self.room.loot and not self.room.looted:
@@ -139,6 +155,7 @@ class Game:
             f"Damage 1d8+{player.damage_bonus} | XP {xp} | Gold {player.gold}",
             f"Second Wind {player.second_wind_uses}/{player.max_second_wind_uses} | "
             f"Hit Dice {player.hit_dice_remaining}/{player.level}",
+            f"Perception save {player.perception_bonus:+d} (Wisdom) | Ambush DC 12",
         ]
         if player.level >= 2:
             lines.append("Action Surge: " + ("ready" if player.action_surge_available else "spent"))
@@ -221,6 +238,7 @@ class Game:
                 return ["The number of Hit Dice cannot be negative."]
             return self.short_rest(dice_limit=limit)
         handlers = {
+            "examine": self.examine_foe,
             "loot": self.collect_loot, "attack": self.attack, "ember": self.use_ember,
             "dodge": self.dodge, "disengage": self.disengage,
             "potion": self.drink_potion, "second wind": self.second_wind,
@@ -231,6 +249,41 @@ class Game:
             return handlers[command]()
         return ["Unknown command. Type 'help' to see your options."]
 
+    def clear_encounter(self) -> None:
+        """Discard opening opportunities and observations when combat changes."""
+        self.free_examine_available = False
+        self.foe_examined = False
+        self.ambush_advantage = False
+        self.initiative_result = None
+        self.perception_result = None
+
+    def examine_foe(self) -> list[str]:
+        """Study a foe once; revisiting acquired information is free."""
+        if self.in_shop or self.enemy is None:
+            return ["There is no threatening foe here to examine."]
+        if not self.player.is_conscious:
+            return ["You must be conscious to examine a foe."]
+        if self.foe_examined:
+            cost = "You recall your observations; no action is spent."
+        elif self.free_examine_available:
+            cost = "You seize the initiative and examine your foe for free; no action or bonus action is spent."
+        else:
+            if self.actions_remaining <= 0:
+                return ["Examining this foe needs one action. Use Action Surge or wait until your next turn."]
+            self.actions_remaining -= 1
+            cost = "You spend one action studying your foe. Your bonus action is unchanged."
+        self.foe_examined = True
+        self.free_examine_available = False
+        details = foe_details(self.enemy)
+        count, sides = details["damage_dice"]
+        bonus = details["damage_bonus"]
+        return [cost, f"Examining {details['name']}", details["description"],
+                f"HP {details['hp']}/{details['max_hp']} | AC {details['armor_class']} | "
+                f"Attack {details['attack_bonus']:+d}",
+                f"Normal hit: {count}d{sides}{bonus:+d} damage "
+                f"({max(0, count + bonus)}–{max(0, count * sides + bonus)} before critical hits).",
+                f"Tactical clue: {details['tactics']}", self.turn_status()]
+
     def move(self, direction: str) -> list[str]:
         if self.enemy:
             return ["An enemy blocks your way. Use Disengage ('flee') to retreat safely."]
@@ -239,6 +292,7 @@ class Game:
             return ["There is no passage in that direction."]
         self.previous_position = self.position
         self.position = target
+        self.clear_encounter()
         self.room.visited = True
         self.elapsed_minutes += 1
         lines = self.describe_room()
@@ -247,6 +301,7 @@ class Game:
         return lines
 
     def begin_encounter(self) -> list[str]:
+        self.clear_encounter()
         enemy = self.enemy
         if enemy is None:
             return []
@@ -255,15 +310,35 @@ class Game:
         self.round_number = 0
         self.dodging = False
         self.enemy_sapped = False
+        self.initiative_result = {"player": hero_roll, "enemy": enemy_roll,
+                                  "hero_first": hero_roll >= enemy_roll}
         lines = [f"Initiative: you {hero_roll}, {enemy.name} {enemy_roll}. "
                  "Ties go to the adventurer."]
         if enemy_roll > hero_roll:
+            perception_roll = self.rng.randint(1, 20)
+            bonus = self.player.perception_bonus
+            total = perception_roll + bonus
+            dc = 12
+            success = total >= dc
+            self.perception_result = {"roll": perception_roll, "bonus": bonus,
+                                      "total": total, "dc": dc, "success": success}
+            self.ambush_advantage = not success
+            lines.append(f"Ambush! {enemy.name} lunges before you can study it.")
+            lines.append(f"Perception save: d20 [{perception_roll}] {bonus:+d} = {total} vs DC {dc}. "
+                         + ("Success! You spot the attack; it has no ambush Advantage." if success
+                            else "Failure! The monster's opening attack has Advantage."))
             lines.extend(self.enemy_turn())
+        else:
+            self.free_examine_available = True
+            lines.append("You act first! Type 'examine' before spending your first action "
+                         "to study your foe for free. You may also attack immediately.")
         if self.enemy is not None or not self.player.is_conscious:
             lines.extend(self.begin_turn())
         return lines
 
     def begin_turn(self) -> list[str]:
+        if self.round_number > 0:
+            self.free_examine_available = False
         self.round_number += 1
         self.actions_remaining = 1
         self.bonus_action_available = True
@@ -303,6 +378,7 @@ class Game:
         if self.actions_remaining <= 0:
             return ["Your action is spent. Use a bonus action, Action Surge, or 'end'."]
         self.actions_remaining -= 1
+        self.free_examine_available = False
         result = roll_attack(self.rng, self.player.attack_bonus, enemy.armor_class,
                              (1, 8), self.player.damage_bonus)
         lines = [self.attack_text("You", enemy.name, result)]
@@ -342,6 +418,7 @@ class Game:
         levels = self.player.gain_xp(enemy.xp_reward)
         self.dodging = False
         self.enemy_sapped = False
+        self.clear_encounter()
         lines = [f"You defeat {enemy.name}! +{enemy.xp_reward} XP, +{enemy.gold_reward} gold."]
         if levels:
             lines.append(f"You reach fighter level {self.player.level}! Maximum HP increases; "
@@ -358,6 +435,8 @@ class Game:
         return lines
 
     def enemy_turn(self) -> list[str]:
+        ambush_advantage = self.ambush_advantage
+        self.ambush_advantage = False
         enemy = self.enemy
         if enemy is None or self.player.dead:
             return []
@@ -365,7 +444,7 @@ class Game:
         result = roll_attack(
             self.rng, enemy.attack_bonus, self.player.armor_class,
             enemy.damage_dice, enemy.damage_bonus,
-            advantage=unconscious,
+            advantage=unconscious or ambush_advantage,
             disadvantage=self.enemy_sapped or (self.dodging and not unconscious),
             critical_on_hit=unconscious,
         )
@@ -391,6 +470,7 @@ class Game:
                 "Run Main.py again to try a new adventure."]
 
     def end_turn(self) -> list[str]:
+        self.free_examine_available = False
         if self.enemy is None:
             if not self.player.dead and not self.player.is_conscious:
                 if self.player.stable:
@@ -414,6 +494,7 @@ class Game:
         if self.actions_remaining <= 0:
             return ["Your action is already spent."]
         self.actions_remaining -= 1
+        self.free_examine_available = False
         self.dodging = True
         return ["You Dodge. Visible enemy attacks have Disadvantage until your next turn.",
                 self.turn_status()]
@@ -431,6 +512,7 @@ class Game:
         self.previous_position = old_position
         self.dodging = False
         self.enemy_sapped = False
+        self.clear_encounter()
         return ["You take the Disengage action and retreat. No opportunity attack is made.",
                 *self.describe_room()]
 
@@ -628,6 +710,7 @@ class Game:
         self.bonus_action_available = True
         self.dodging = self.enemy_sapped = False
         self.round_number = 0
+        self.clear_encounter()
         return [f"The portal carries you deeper, to floor {self.floor}.",
                 self.dungeon.lore.arrival, "", *self.describe_room()]
 
@@ -640,6 +723,7 @@ class Game:
         if self.player.ember_stones <= 0:
             return ["You have no Ember stones. Buy them from Mira."]
         self.actions_remaining -= 1
+        self.free_examine_available = False
         self.player.ember_stones -= 1
         damage = roll_dice(self.rng, 3, 6)
         enemy.take_damage(damage)
@@ -677,9 +761,18 @@ class Game:
                 "position": list(self.position), "player": asdict(self.player),
                 "journal": [asdict(note) for note in self.journal],
                 "armor_class": self.player.armor_class, "attack_bonus": self.player.attack_bonus,
+                "perception_bonus": self.player.perception_bonus,
                 "rooms": rooms, "portal_open": self.floor_cleared,
                 "portal_position": list(self.dungeon.boss_position) if self.floor_cleared else None,
                 "shop": [asdict(item) for item in stock(self.floor)] if self.in_shop else [],
+                "encounter": {
+                    "initiative": dict(self.initiative_result) if self.initiative_result else None,
+                    "perception": dict(self.perception_result) if self.perception_result else None,
+                    "free_examine_available": self.free_examine_available,
+                    "foe_examined": self.foe_examined,
+                    "ambush_advantage": self.ambush_advantage,
+                    "foe_details": foe_details(self.enemy) if self.foe_examined and self.enemy else None,
+                },
                 "turn": {"round": self.round_number, "actions": self.actions_remaining,
                          "bonus_action": self.bonus_action_available},
                 "won": self.won, "over": self.over}

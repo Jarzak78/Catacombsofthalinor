@@ -113,6 +113,11 @@ class Player:
         return self.dexterity_modifier
 
     @property
+    def perception_bonus(self) -> int:
+        """Wisdom bonus for the dungeon's Perception ambush save."""
+        return self.wisdom_modifier
+
+    @property
     def is_alive(self) -> bool:
         """Whether the player is alive, including at zero hit points."""
         return not self.dead

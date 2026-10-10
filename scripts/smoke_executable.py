@@ -21,11 +21,14 @@ def main() -> int:
         print(f"Executable not found: {executable}", file=sys.stderr)
         return 2
 
-    game, commands, _ = complete_adventure(7, floors=5)
+    game, commands, transcript = complete_adventure(7, floors=5)
     if len(game.journal) != 20:
         raise RuntimeError("The reference adventure did not collect all twenty lore notes.")
     if not game.won:
         raise RuntimeError("The reference adventure did not reach victory.")
+    encounter_text = "\n".join(transcript)
+    if "Examining " not in encounter_text or "Perception save:" not in encounter_text:
+        raise RuntimeError("The reference adventure did not exercise examination and ambush saves.")
     scenarios = [
         ("full adventure", "\n".join(commands) + "\n", "Your first dungeon is conquered"),
         ("collect and read lore", "loot\njournal\nread 1\nquit\n", "Adventurer's clue:"),
@@ -45,6 +48,9 @@ def main() -> int:
                 raise RuntimeError(f"Executable smoke test failed: {name} (exit {result.returncode})")
             if name == "full adventure" and "Floor 5/5" not in result.stdout:
                 raise RuntimeError("Executable adventure did not reach the fifth floor.")
+            if name == "full adventure" and ("Examining " not in result.stdout
+                                             or "Perception save:" not in result.stdout):
+                raise RuntimeError("Executable adventure did not exercise examination and ambush saves.")
             print(f"PASS: {name}")
     return 0
 

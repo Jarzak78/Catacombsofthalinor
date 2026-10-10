@@ -66,6 +66,8 @@ def complete_adventure(seed, floors=1):
             if not game.player.is_conscious:
                 act("end")
                 continue
+            if game.free_examine_available:
+                act("examine")
             if game.player.hp <= game.player.max_hp - 5 and game.bonus_action_available:
                 if game.player.second_wind_uses:
                     act("wind")
@@ -137,7 +139,8 @@ class TurnTests(unittest.TestCase):
         game = Game(seed=7)
         direction, position = next(iter(game.room.exits.items()))
         game.dungeon.get_room(position).enemy = Enemy("Sentry", 10, 10, 12, 3, (1, 6), 1, 50, 0)
-        game.rng = ScriptedRandom([2, 20, 15, 3])
+        # The successful Perception check avoids ambush Advantage.
+        game.rng = ScriptedRandom([2, 20, 12, 15, 3])
         output = game.handle_command(direction)
         self.assertEqual(game.player.hp, 8)
         self.assertEqual(game.actions_remaining, 1)

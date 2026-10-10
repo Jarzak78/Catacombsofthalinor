@@ -243,14 +243,14 @@ class CombatFumbleTests(unittest.TestCase):
         self.assertFalse(game.in_shop)
 
     def test_enemy_self_kill_before_first_player_turn_does_not_start_combat(self):
-        game = scripted_game(2, 20, 1)
+        game = scripted_game(2, 20, 12, 1)
         game.enemy.hp = 1
         output = game.begin_encounter()
         self.assertIsNone(game.enemy)
         self.assertEqual(game.player.xp, 50)
         self.assertEqual(game.round_number, 0)
         self.assertNotIn("Actions left", "\n".join(output))
-        self.assertEqual(game.rng.calls, [(1, 20)] * 3)
+        self.assertEqual(game.rng.calls, [(1, 20)] * 4)
 
     def test_enemy_self_kill_allows_unconscious_player_to_stabilize_and_recover(self):
         game = scripted_game(1, 1, 10, 3)
