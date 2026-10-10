@@ -165,6 +165,11 @@ Pass an explicit seed to reproduce gameplay failures.
 
 ## Build the Windows executable
 
+For free signing on your own Windows account, see
+[personal test signing](PERSONAL_TEST_SIGNING.md). The tool creates a local,
+short-lived certificate and signs a separate EXE copy. It does not clear Chrome
+download detections or change antivirus, browser, or PowerShell policies.
+
 GitHub builds a **64-bit Windows console executable** whenever Python source
 or build configuration is pushed to `main`, `codex/first-playable-dungeon`, or `codex/dungeon-campaign`.
 Once this workflow is on the repository's default branch, GitHub also

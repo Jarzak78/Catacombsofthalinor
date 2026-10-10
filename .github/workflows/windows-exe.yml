@@ -9,6 +9,7 @@ on:
       - codex/dungeon-campaign
     paths:
       - '**.py'
+      - '**.ps1'
       - requirements-build.txt
       - .github/workflows/windows-exe.yml
 
@@ -40,6 +41,10 @@ jobs:
 
       - name: Build the standalone console executable
         run: python scripts/build_windows.py
+
+      - name: Verify personal signing with temporary test certificates
+        shell: powershell
+        run: .\scripts\test_personal_signing.ps1 -ExecutablePath .\dist\CatacombsOfThalinor.exe
 
       - name: Play a complete adventure through the executable
         run: python scripts/smoke_executable.py dist/CatacombsOfThalinor.exe
