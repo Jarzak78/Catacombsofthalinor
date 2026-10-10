@@ -150,8 +150,9 @@ Pass an explicit seed to reproduce gameplay failures.
 
 GitHub builds a **64-bit Windows console executable** whenever Python source
 or build configuration is pushed to `main` or `codex/first-playable-dungeon`.
-You can also use **Run workflow** on the Actions page, selecting the game
-branch. Each build runs the test suite and then plays a complete adventure
+Once this workflow is on the repository's default branch, GitHub also
+allows **Run workflow** on the Actions page, selecting the game branch.
+Each build runs the test suite and then plays a complete adventure
 through the actual executable from outside the checkout before uploading it.
 
 To build on your own Windows computer, install **64-bit Python 3.12**, open
