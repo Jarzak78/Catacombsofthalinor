@@ -5,6 +5,7 @@ from actions import Action
 from battle_flavor import hit_description, miss_description
 from campaign import FLOORS, stock
 from lore_notes import LoreNote
+from loot_flavor import discovery_description
 import random
 
 from combat import AttackResult, roll_attack, roll_initiative, roll_dice
@@ -619,7 +620,9 @@ class Game:
                 self.journal.append(note)
                 lines.append(f"You collect '{note.title}' and add it to your journal.")
                 lines.append(f"Type 'read {len(self.journal)}' to read it, or 'journal' to browse your notes.")
-        return lines or ["There are no unclaimed notes or treasure here."]
+        if lines:
+            return [discovery_description(self.room, self.floor), *lines]
+        return ["There are no unclaimed notes or treasure here."]
 
     def journal_lines(self) -> list[str]:
         if not self.journal:

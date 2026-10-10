@@ -55,6 +55,12 @@ exits, treasure, and documents wait until the fight is over. During combat,
 `look` keeps the same focused view. After victory, type `look` to examine the
 room and discover what you can collect.
 
+Successful `loot` searches describe where you uncover the find: abandoned
+packs, burial chests, offerings, and other hiding places suited to each room
+and floor. Treasure and documents share one discovery description when found
+together. The following lines list exactly what you collect. Discovery prose
+lives in `loot_flavor.py` and consumes no random rolls.
+
 ## Commands
 
 | Command | Effect |
