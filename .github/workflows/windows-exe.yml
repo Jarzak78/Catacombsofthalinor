@@ -43,6 +43,7 @@ jobs:
         run: python scripts/build_windows.py
 
       - name: Verify personal signing with temporary test certificates
+        timeout-minutes: 3
         shell: powershell
         run: .\scripts\test_personal_signing.ps1 -ExecutablePath .\dist\CatacombsOfThalinor.exe
 

@@ -41,6 +41,13 @@ $localHash = (Get-FileHash -LiteralPath '.\dist\CatacombsOfThalinor.exe' -Algori
 .\scripts\sign_personal_test.ps1 -ExecutablePath '.\dist\CatacombsOfThalinor.exe' -ExpectedSha256 $localHash -TrustForThisUser
 ```
 
+Windows may display a **Security Warning** asking whether to install the
+certificate. Check that it names **Catacombs of Thalinor Personal Testing**;
+the tool also prints its thumbprint for comparison with the certificate details.
+Choose **Yes** only for the certificate you just created on your own PC. This is
+Windows' certificate-trust confirmation, documented by
+[Microsoft](https://learn.microsoft.com/en-us/troubleshoot/developer/visualstudio/installation/warnings-untrusted-certificate).
+
 The hash identifies the local build you selected; it is not an antivirus scan.
 Run `dist\CatacombsOfThalinor.personal-test.exe` after the tool reports
 **Signature status: Valid**. Windows or antivirus software can still block a

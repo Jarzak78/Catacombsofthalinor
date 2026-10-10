@@ -1,7 +1,9 @@
 #requires -Version 5.1
 <#
-Exercise personal signing on a built Windows game, with certificate cleanup.
-Run on Windows: .\scripts\test_personal_signing.ps1 -ExecutablePath .\dist\CatacombsOfThalinor.exe
+Exercise personal signing on a built Windows game in an isolated Windows CI runner.
+This test temporarily provisions one public test certificate in LocalMachine Root.
+The product's CurrentUser trust option requires a native confirmation and is
+reviewed separately; unattended CI does not invoke or dismiss that dialog.
 #>
 [CmdletBinding()]
 param(
@@ -81,6 +83,17 @@ function Assert-PublicCertificate {
 if ($env:OS -ne 'Windows_NT') {
     throw 'Personal signing tests require Windows.'
 }
+if ($env:GITHUB_ACTIONS -ne 'true' -or $env:RUNNER_ENVIRONMENT -ne 'github-hosted') {
+    throw 'These certificate-store tests run only on an isolated GitHub-hosted runner.'
+}
+$windowsIdentity = [System.Security.Principal.WindowsIdentity]::GetCurrent()
+try {
+    $windowsPrincipal = [System.Security.Principal.WindowsPrincipal]::new($windowsIdentity)
+    Assert-Condition ($windowsPrincipal.IsInRole([System.Security.Principal.WindowsBuiltInRole]::Administrator)) 'The isolated CI runner must have administrator rights for temporary test-certificate provisioning.'
+}
+finally {
+    $windowsIdentity.Dispose()
+}
 $source = Get-Item -LiteralPath $ExecutablePath
 Assert-Condition (-not $source.PSIsContainer) 'ExecutablePath must name a file.'
 $sourcePath = $source.FullName
@@ -89,6 +102,7 @@ $signingScript = Join-Path $PSScriptRoot 'sign_personal_test.ps1'
 $smokeScript = Join-Path $PSScriptRoot 'smoke_executable.py'
 $temporaryDirectory = Join-Path ([System.IO.Path]::GetTempPath()) ('thalinor-signing-' + [guid]::NewGuid().ToString('N'))
 $thumbprints = New-Object 'System.Collections.Generic.List[string]'
+$machineRootThumbprints = New-Object 'System.Collections.Generic.List[string]'
 $cleanupErrors = New-Object 'System.Collections.Generic.List[string]'
 
 try {
@@ -152,21 +166,28 @@ try {
     Write-Host 'PASS: Existing output is preserved.'
 
     $trustedPath = Join-Path $trustedDirectory 'game.exe'
-    $trustedResults = @(& $signingScript -ExecutablePath $trustedPath -ExpectedSha256 $originalHash -TrustForThisUser)
-    Assert-Condition ($trustedResults.Count -eq 1) 'Trust mode must return one result object.'
+    $trustedResults = @(& $signingScript -ExecutablePath $trustedPath -ExpectedSha256 $originalHash)
+    Assert-Condition ($trustedResults.Count -eq 1) 'The second sign-only invocation must return one result object.'
     $trusted = $trustedResults[0]
     $thumbprints.Add([string]$trusted.Thumbprint)
-    Assert-Condition $trusted.TrustInstalled 'Explicit trust mode did not report installing trust.'
+    Assert-Condition (-not $trusted.TrustInstalled) 'The second sign-only invocation reported installing trust.'
     foreach ($store in @('Root', 'TrustedPublisher')) {
-        Assert-Condition (Test-Path -LiteralPath ('Cert:\CurrentUser\' + $store + '\' + $trusted.Thumbprint)) ('Explicit trust mode did not install its public certificate in ' + $store + '.')
+        Assert-Condition (-not (Test-Path -LiteralPath ('Cert:\CurrentUser\' + $store + '\' + $trusted.Thumbprint))) ('Sign-only mode unexpectedly installed current-user trust in ' + $store + '.')
     }
-    $trustedSignature = Get-AuthenticodeSignature -LiteralPath $trusted.SignedPath
-    Assert-Condition ([string]$trustedSignature.Status -eq 'Valid') 'The explicitly trusted signature is not Valid.'
-    Assert-Condition ($trustedSignature.SignerCertificate.Thumbprint -eq $trusted.Thumbprint) 'Trust mode used the wrong certificate.'
-    Assert-Condition ([string]$trusted.SignatureStatus -eq 'Valid') 'Trust mode returned an incorrect status.'
-    Assert-Condition ((Get-FileHash -LiteralPath $trustedPath -Algorithm SHA256).Hash -eq $originalHash) 'Trust mode modified its input.'
     Assert-PublicCertificate $trusted
-    Write-Host 'PASS: Explicit current-user trust produces a Valid code-signing signature.'
+    $machineRootPath = 'Cert:\LocalMachine\Root\' + $trusted.Thumbprint
+    Assert-Condition (-not (Test-Path -LiteralPath $machineRootPath)) 'The newly generated test certificate unexpectedly already exists in LocalMachine Root.'
+    $machineRootThumbprints.Add([string]$trusted.Thumbprint)
+    # Explicit test-runner provisioning avoids the native CurrentUser Root UI.
+    # This does not change the product script's optional CurrentUser-only scope.
+    PKI\Import-Certificate -FilePath $trusted.CertificatePath -CertStoreLocation 'Cert:\LocalMachine\Root' | Out-Null
+    Assert-Condition (Test-Path -LiteralPath $machineRootPath) 'The isolated runner did not provision its public test certificate.'
+    $trustedSignature = Get-AuthenticodeSignature -LiteralPath $trusted.SignedPath
+    Assert-Condition ([string]$trustedSignature.Status -eq 'Valid') 'The provisioned test certificate did not produce a Valid signature.'
+    Assert-Condition ($trustedSignature.SignerCertificate.Thumbprint -eq $trusted.Thumbprint) 'The provisioned signature has the wrong signer.'
+    Assert-Condition (@('NotTrusted', 'UnknownError') -contains [string]$trusted.SignatureStatus) 'The second sign-only invocation returned an unexpected initial signature status.'
+    Assert-Condition ((Get-FileHash -LiteralPath $trustedPath -Algorithm SHA256).Hash -eq $originalHash) 'The second signing invocation modified its input.'
+    Write-Host 'PASS: Explicit provisioning of a public test certificate produces a Valid signature on the isolated runner.'
 
     $tamperedPath = Join-Path $trustedDirectory 'tampered.exe'
     Copy-Item -LiteralPath $trusted.SignedPath -Destination $tamperedPath
@@ -192,6 +213,20 @@ try {
     Write-Host 'PASS: The signed game still completes its executable smoke tests, and the original is unchanged.'
 }
 finally {
+    foreach ($thumbprint in $machineRootThumbprints) {
+        $certificatePath = 'Cert:\LocalMachine\Root\' + $thumbprint
+        try {
+            if (Test-Path -LiteralPath $certificatePath) {
+                Remove-Item -LiteralPath $certificatePath
+            }
+            if (Test-Path -LiteralPath $certificatePath) {
+                throw 'The test certificate remains in LocalMachine Root.'
+            }
+        }
+        catch {
+            $cleanupErrors.Add('Could not remove ' + $certificatePath + ': ' + $_.Exception.Message)
+        }
+    }
     foreach ($thumbprint in $thumbprints) {
         foreach ($store in @('Root', 'TrustedPublisher', 'My')) {
             $certificatePath = 'Cert:\CurrentUser\' + $store + '\' + $thumbprint

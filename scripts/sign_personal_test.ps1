@@ -92,6 +92,9 @@ try {
 
     if ($TrustForThisUser) {
         Write-Host 'Installing this public code-signing certificate for your Windows account only.'
+        Write-Host "Certificate: $($certificate.Subject)"
+        Write-Host "Thumbprint: $($certificate.Thumbprint)"
+        Write-Host 'Windows may ask you to confirm trusting this certificate. Check the name above before confirming.'
         Import-Certificate -FilePath $certificatePath -CertStoreLocation 'Cert:\CurrentUser\Root' | Out-Null
         Import-Certificate -FilePath $certificatePath -CertStoreLocation 'Cert:\CurrentUser\TrustedPublisher' | Out-Null
     }
