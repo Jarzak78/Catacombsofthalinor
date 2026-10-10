@@ -1,8 +1,11 @@
 """Solo dungeon exploration with revised 2024 5e martial combat."""
 
+from dataclasses import asdict
+from actions import Action
+from campaign import FLOORS, stock
 import random
 
-from combat import AttackResult, roll_attack, roll_initiative
+from combat import AttackResult, roll_attack, roll_initiative, roll_dice
 from dungeon import Dungeon
 from player import Player
 from room import Enemy, Room
@@ -14,6 +17,8 @@ Actions: attack (a), dodge (d), disengage (flee/f)
 Bonus actions: potion (p), second wind (wind)
 Turn control: end, action surge (surge; fighter level 2)
 Rest: rest [dice] (1 hour), long rest (8 hours; entrance only)
+Portal: portal (after guardian), shop, buy <item id>, descend
+Magic: ember (consumes an action and an Ember stone)
 Other: stats, inventory (i), help (h), quit (q)
 
 Attacks: d20 + attack bonus vs Armor Class. Natural 1 misses; 20 crits.
@@ -28,7 +33,7 @@ fighter can spend Hit Dice to heal. 'rest 0' saves your dice; 'rest 1' caps
 spending at one die. Plain 'rest' spends dice until healed or out of dice.
 Long rests restore HP and all resources.
 At 0 HP you are unconscious: 'end' lets combat and death saves continue.
-Collect treasure with 'loot'. Defeat the Warden to clear your first dungeon."""
+Collect treasure with 'loot'. Defeat each guardian, then use 'portal' to shop."""
 
 ALIASES = {
     "n": "north", "s": "south", "e": "east", "w": "west",
@@ -44,7 +49,13 @@ DIRECTIONS = {"north", "south", "east", "west"}
 class Game:
     """One adventure; commands return text and never read terminal input."""
 
-    def __init__(self, name: str = "Adventurer", seed: int | None = None):
+    def __init__(self, name: str = "Adventurer", seed: int | None = None, floors: int = 5):
+        if not 1 <= floors <= len(FLOORS):
+            raise ValueError("Choose between 1 and 5 floors.")
+        self.total_floors = floors
+        self.floor = 1
+        self.in_shop = False
+        self.floor_cleared = False
         self.rng = random.Random(seed)
         self.dungeon = Dungeon(self.rng)
         self.player = Player(name=name)
@@ -80,7 +91,7 @@ class Game:
             "Your guild badge is still bright, and your sword has yet to face a monster.",
             f"Today, {self.player.name}, you enter your very first dungeon.",
             "You are a first-level fighter with a longsword, shield, and chain mail.",
-            "Defeat the Warden and return as a proven adventurer.",
+            f"Conquer {self.total_floors} dungeon floors; portals lead to a vendor between floors.",
             "Explore, gather supplies, and grow stronger before challenging him.",
             "Type 'help' for commands. Your starting pack holds three healing potions.",
             "Combat uses revised 2024 5e rules; type 'end' to finish your turn.",
@@ -88,7 +99,13 @@ class Game:
         ]
 
     def describe_room(self) -> list[str]:
-        lines = [self.room.name, self.room.description]
+        if self.in_shop:
+            return ["The Lantern Between Worlds", "A portal brings you to Mira, the enchanted outfitter.",
+                    "Use 'shop', 'buy <item id>', and 'descend' when ready."]
+        lines = [f"Floor {self.floor}/{self.total_floors}: {self.dungeon.theme.name}",
+                 self.room.name, self.room.description]
+        if self.floor_cleared and self.position == self.dungeon.boss_position:
+            lines.append("A glowing portal is open. Type 'portal' to visit the vendor.")
         enemy = self.enemy
         if enemy:
             lines.append(f"{enemy.name} blocks your way! HP {enemy.hp}/{enemy.max_hp}, "
@@ -106,7 +123,7 @@ class Game:
         target = player.xp_to_next_level
         xp = f"{player.xp}/{target}" if target is not None else f"{player.xp} (maximum level)"
         lines = [
-            f"{player.name} | Fighter {player.level} | HP {player.hp}/{player.max_hp} "
+            f"Floor {self.floor}/{self.total_floors} | {player.name} | Fighter {player.level} | HP {player.hp}/{player.max_hp} "
             f"{health_bar(player.hp, player.max_hp)}",
             f"AC {player.armor_class} | Attack +{player.attack_bonus} | "
             f"Damage 1d8+{player.damage_bonus} | XP {xp} | Gold {player.gold}",
@@ -134,18 +151,33 @@ class Game:
         if command.startswith(("go ", "move ")):
             command = command.split(" ", 1)[1]
         command = ALIASES.get(command, command)
+        if command.startswith(("buy ", "rest ")):
+            kind, argument = command.split(" ", 1)
+            return self.perform(Action(kind, argument))
+        return self.perform(Action(command))
+
+    def perform(self, action: Action) -> list[str]:
+        """Execute a device-independent action; GUIs call this directly."""
+        if self.over:
+            return ["This adventure is over. Run Main.py to begin another."]
+        command = action.kind
+        if action.argument:
+            command += " " + action.argument
         if command == "help":
             return HELP.splitlines()
         if command == "look":
             return self.describe_room()
         if command == "map":
+            if self.in_shop:
+                return ["You are in the vendor sanctuary, outside the dungeon."]
             return [*self.dungeon.map_lines(self.position),
                     "@ you | ? unexplored | . explored | E enemy | B Warden | $ treasure"]
         if command == "stats":
             return self.status()
         if command == "inventory":
             return [f"Weapon: {self.player.weapon_name} (magic bonus +{self.player.weapon_bonus})",
-                    "Armor: chain mail and shield | Fighting style: Dueling | Mastery: Sap",
+                    f"Armor: runic bonus +{self.player.armor_bonus} | Warding ring +{self.player.ward_bonus}",
+                    f"Vitality charm: {self.player.vitality_charm} | Ember stones: {self.player.ember_stones}",
                     f"Healing potions: {self.player.potions} | Gold: {self.player.gold}"]
         if command == "quit":
             self.quit_requested = True
@@ -154,6 +186,16 @@ class Game:
             if command == "end":
                 return self.end_turn()
             return ["You are unconscious and cannot act. Type 'end' to continue combat."]
+        if command == "portal":
+            return self.enter_portal()
+        if command == "shop":
+            return self.shop()
+        if command.startswith("buy "):
+            return self.buy(command[4:])
+        if command == "descend":
+            return self.descend()
+        if self.in_shop:
+            return ["You are shopping. Use 'buy <item id>' or 'descend' when ready."]
         if command in DIRECTIONS:
             return self.move(command)
         if command.startswith("rest "):
@@ -165,7 +207,7 @@ class Game:
                 return ["The number of Hit Dice cannot be negative."]
             return self.short_rest(dice_limit=limit)
         handlers = {
-            "loot": self.collect_loot, "attack": self.attack,
+            "loot": self.collect_loot, "attack": self.attack, "ember": self.use_ember,
             "dodge": self.dodge, "disengage": self.disengage,
             "potion": self.drink_potion, "second wind": self.second_wind,
             "action surge": self.action_surge, "end": self.end_turn,
@@ -227,6 +269,16 @@ class Game:
         return [self.turn_status()]
 
     def attack(self) -> list[str]:
+        if self.enemy is None or self.actions_remaining <= 0:
+            return self.attack_once()
+        lines = self.attack_once()
+        if self.player.level >= 5 and self.enemy is not None:
+            self.actions_remaining += 1
+            lines.append("Extra Attack: your second longsword strike.")
+            lines.extend(self.attack_once())
+        return lines
+
+    def attack_once(self) -> list[str]:
         enemy = self.enemy
         if enemy is None:
             return ["There is no enemy here to attack."]
@@ -270,13 +322,9 @@ class Game:
             if self.player.level >= 2:
                 lines.append("Action Surge is unlocked: one extra action, once per short or long rest.")
         if enemy.boss:
-            self.won = True
-            lines.extend([
-                "The Warden falls, and the sealed catacombs grow quiet.",
-                "You take his bronze seal as proof of your victory.",
-                f"Congratulations, {self.player.name}! Your first dungeon is conquered.",
-                *self.status(),
-            ])
+            self.floor_cleared = True
+            lines.extend([f"Floor {self.floor} cleared! A portal opens beside the fallen guardian.",
+                          "Type 'portal' to visit Mira's shop, then 'descend' when ready."])
         return lines
 
     def enemy_turn(self) -> list[str]:
@@ -425,3 +473,123 @@ class Game:
         if loot.weapon_name and self.player.equip_weapon(loot.weapon_name, loot.weapon_bonus):
             lines.append(f"You equip {loot.weapon_name} (+{loot.weapon_bonus} to attack and damage).")
         return lines
+
+
+    def enter_portal(self) -> list[str]:
+        if self.in_shop:
+            return ["You are already in Mira's sanctuary."]
+        if not self.floor_cleared or self.position != self.dungeon.boss_position:
+            return ["The portal opens in the guardian's room only after its defeat."]
+        self.in_shop = True
+        self.elapsed_minutes += 480
+        self.last_long_rest_end = self.elapsed_minutes
+        self.player.long_rest()
+        return ["The portal teleports you to Mira's sanctuary. A safe night's rest restores your resources.",
+                *self.describe_room(), *self.shop()]
+
+    def shop(self) -> list[str]:
+        if not self.in_shop:
+            return ["Visit the vendor through a cleared floor's portal first."]
+        return [f"Mira's stock | Gold: {self.player.gold}",
+                *(f"{item.id}: {item.name} — {item.price} gold. {item.description}"
+                  for item in stock(self.floor)),
+                "Buy with 'buy <item id>'; purchases equip automatically. Type 'descend' when done."]
+
+    def buy(self, item_id: str) -> list[str]:
+        if not self.in_shop:
+            return ["You can only buy items at the vendor."]
+        item = next((item for item in stock(self.floor) if item.id == item_id), None)
+        if item is None:
+            return ["Unknown item. Use 'shop' for item ids and prices."]
+        p = self.player
+        redundant = ((item.kind == "weapon" and p.weapon_bonus >= item.value)
+                     or (item.kind == "armor" and p.armor_bonus >= item.value)
+                     or (item.kind == "charm" and p.vitality_charm)
+                     or (item.kind == "ward" and p.ward_bonus >= item.value))
+        if redundant:
+            return ["You already have this item or better gear. Your gold is unchanged."]
+        if p.gold < item.price:
+            return [f"You need {item.price} gold; you have {p.gold}."]
+        p.gold -= item.price
+        if item.kind == "weapon":
+            p.equip_weapon(item.name, item.value)
+        elif item.kind == "armor":
+            p.armor_bonus = item.value
+        elif item.kind == "ward":
+            p.ward_bonus = item.value
+        elif item.kind == "charm":
+            p.vitality_charm = True
+            p.max_hp += item.value
+            p.hp += item.value
+        elif item.kind == "potion":
+            p.potions += item.value
+        elif item.kind == "ember":
+            p.ember_stones += item.value
+        return [f"Bought {item.name} for {item.price} gold. Gold remaining: {p.gold}."]
+
+    def descend(self) -> list[str]:
+        if not self.in_shop:
+            return ["Use the guardian's portal and finish shopping before descending."]
+        if self.floor == self.total_floors:
+            self.won = True
+            return ["Mira's final portal returns you to daylight.",
+                    "Your first dungeon is conquered! Every guardian has fallen.", *self.status()]
+        self.floor += 1
+        self.dungeon = Dungeon(self.rng, floor=self.floor)
+        self.position = self.dungeon.start
+        self.previous_position = None
+        self.room.visited = True
+        self.floor_cleared = False
+        self.in_shop = False
+        self.actions_remaining = 1
+        self.bonus_action_available = True
+        self.dodging = self.enemy_sapped = False
+        self.round_number = 0
+        return [f"The portal carries you deeper, to floor {self.floor}.", *self.describe_room()]
+
+    def use_ember(self) -> list[str]:
+        enemy = self.enemy
+        if enemy is None:
+            return ["Save Ember stones for combat."]
+        if self.actions_remaining <= 0:
+            return ["Your action is spent."]
+        if self.player.ember_stones <= 0:
+            return ["You have no Ember stones. Buy them from Mira."]
+        self.actions_remaining -= 1
+        self.player.ember_stones -= 1
+        damage = roll_dice(self.rng, 3, 6)
+        enemy.take_damage(damage)
+        lines = [f"Your Ember stone bursts for {damage} magic damage!"]
+        if not enemy.is_alive:
+            lines.extend(self.defeat_enemy(enemy))
+        else:
+            lines.append(self.turn_status())
+        return lines
+
+    def get_state(self) -> dict:
+        """Detached JSON-compatible view for renderers; reading never rolls RNG.
+
+        Room identities are [x,y] coordinates within the current floor. Unknown
+        rooms expose only their position so graphical maps cannot leak enemies.
+        A renderer can display this state and call perform(Action(...)) without
+        parsing terminal prose. Mutating the snapshot cannot change the engine.
+        """
+        rooms = []
+        for room in self.dungeon.rooms.values():
+            data = {"position": list(room.position), "visited": room.visited}
+            if room.visited:
+                data.update(name=room.name, description=room.description,
+                            exits={k: list(v) for k, v in room.exits.items()},
+                            enemy=asdict(room.enemy) if room.enemy else None,
+                            loot=asdict(room.loot) if room.loot and not room.looted else None)
+            rooms.append(data)
+        return {"floor": self.floor, "total_floors": self.total_floors,
+                "theme": self.dungeon.theme.name, "scene": "shop" if self.in_shop else "dungeon",
+                "position": list(self.position), "player": asdict(self.player),
+                "armor_class": self.player.armor_class, "attack_bonus": self.player.attack_bonus,
+                "rooms": rooms, "portal_open": self.floor_cleared,
+                "portal_position": list(self.dungeon.boss_position) if self.floor_cleared else None,
+                "shop": [asdict(item) for item in stock(self.floor)] if self.in_shop else [],
+                "turn": {"round": self.round_number, "actions": self.actions_remaining,
+                         "bonus_action": self.bonus_action_available},
+                "won": self.won, "over": self.over}

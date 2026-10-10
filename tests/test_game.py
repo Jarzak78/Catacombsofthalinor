@@ -49,9 +49,9 @@ def route_to(game, destination):
     raise AssertionError(f"No route to {destination}")
 
 
-def complete_adventure(seed):
+def complete_adventure(seed, floors=1):
     """Explore every room using actual combat rolls, healing, and actions."""
-    game = Game(name="Tarin", seed=seed)
+    game = Game(name="Tarin", seed=seed, floors=floors)
     transcript = []
     commands = []
 
@@ -89,23 +89,32 @@ def complete_adventure(seed):
                 if game.player.hp < game.player.max_hp:
                     act("wind")
 
-    targets = [position for position in game.dungeon.rooms
-               if position != game.dungeon.boss_position]
-    # Collect the guaranteed adjacent weapon before visiting hostile rooms.
-    weapon_room = next(position for position, room in game.dungeon.rooms.items()
-                       if room.loot and room.loot.weapon_name)
-    targets.remove(weapon_room)
-    targets.insert(0, weapon_room)
-    targets.append(game.dungeon.boss_position)
-    for target in targets:
-        for direction in route_to(game, target):
-            act(direction)
+    while not game.over:
+        targets = [position for position in game.dungeon.rooms
+                   if position != game.dungeon.boss_position]
+        # First floor has the guaranteed weapon; later floors have supplies.
+        weapon_room = next((position for position, room in game.dungeon.rooms.items()
+                            if room.loot and room.loot.weapon_name), None)
+        if weapon_room is not None:
+            targets.remove(weapon_room)
+            targets.insert(0, weapon_room)
+        targets.append(game.dungeon.boss_position)
+        for target in targets:
+            for direction in route_to(game, target):
+                act(direction)
+                clear_room()
+                if game.over:
+                    return game, commands, transcript
             clear_room()
             if game.over:
                 return game, commands, transcript
-        clear_room()
-        if game.over:
-            break
+        if not game.floor_cleared:
+            raise AssertionError("Floor exploration did not defeat its guardian")
+        act("portal")
+        if game.floor < game.total_floors:
+            for item in ("sword", "armor", "charm", "ward"):
+                act("buy " + item)
+        act("descend")
     return game, commands, transcript
 
 
@@ -354,7 +363,7 @@ class ExplorationTests(unittest.TestCase):
         game, commands, _ = complete_adventure(7)
         self.assertTrue(game.won)
         result = subprocess.run(
-            [sys.executable, "-B", "Main.py", "--name", "Tarin", "--seed", "7"],
+            [sys.executable, "-B", "Main.py", "--name", "Tarin", "--seed", "7", "--floors", "1"],
             cwd=ROOT, input="\n".join(commands) + "\n", text=True,
             capture_output=True, timeout=10,
         )
@@ -365,7 +374,7 @@ class ExplorationTests(unittest.TestCase):
     def test_cli_handles_quit_and_closed_input(self):
         for commands in ("help\nstats\nquit\n", ""):
             with self.subTest(commands=commands):
-                result = subprocess.run([sys.executable, "-B", "Main.py", "--seed", "7"],
+                result = subprocess.run([sys.executable, "-B", "Main.py", "--seed", "7", "--floors", "1"],
                                         cwd=ROOT, input=commands, text=True,
                                         capture_output=True, timeout=10)
                 self.assertEqual(result.returncode, 0, result.stderr)

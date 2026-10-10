@@ -6,6 +6,7 @@ on:
     branches:
       - main
       - codex/first-playable-dungeon
+      - codex/dungeon-campaign
     paths:
       - '**.py'
       - requirements-build.txt

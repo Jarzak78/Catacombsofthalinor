@@ -1,9 +1,10 @@
 """Generate and reveal a connected, seedable dungeon."""
 
+from campaign import FLOORS
 from collections import deque
 import random
 
-from loot_library import TREASURE_BUNDLES
+from loot_library import Loot, TREASURE_BUNDLES
 from room import Room
 from room_library import ENTRANCE, ROOM_FLAVORS, SANCTUM, make_enemy, make_warden
 
@@ -28,11 +29,31 @@ class Dungeon:
     start = (0, 0)
     boss_position = (3, 2)
 
-    def __init__(self, rng: random.Random) -> None:
+    def __init__(self, rng: random.Random, floor: int = 1) -> None:
+        if not 1 <= floor <= len(FLOORS):
+            raise ValueError("Invalid dungeon floor.")
+        self.floor = floor
+        self.theme = FLOORS[floor - 1]
         self.rooms: dict[tuple[int, int], Room] = {}
         self._create_rooms(rng)
         self._connect_rooms(rng)
         self._place_contents(rng)
+        depth = floor - 1
+        for room in self.rooms.values():
+            if depth:
+                room.name = f"{self.theme.name}: {room.name}"
+                room.description = f"Deep beneath Thalinor, floor {floor}. " + room.description
+            if room.enemy:
+                enemy = room.enemy
+                enemy.max_hp += depth * (10 if enemy.boss else 5)
+                enemy.hp = enemy.max_hp
+                enemy.armor_class += depth
+                enemy.attack_bonus += depth
+                enemy.damage_bonus += depth
+                enemy.xp_reward *= floor
+                enemy.gold_reward *= floor
+                if enemy.boss:
+                    enemy.name = self.theme.guardian
 
     def _create_rooms(self, rng: random.Random) -> None:
         flavors = list(ROOM_FLAVORS)
@@ -114,12 +135,13 @@ class Dungeon:
                     frontier.append(destination)
         weapon_position = min(positions, key=distances.__getitem__)
         positions.remove(weapon_position)
-        self.rooms[weapon_position].loot = TREASURE_BUNDLES[-1]
+        self.rooms[weapon_position].loot = (TREASURE_BUNDLES[-1] if self.floor == 1
+                                                  else Loot(gold=12 * self.floor, potions=2))
 
         treasures = list(TREASURE_BUNDLES[:-1])
         rng.shuffle(treasures)
         for position, treasure in zip(positions[:3], treasures):
-            self.rooms[position].loot = treasure
+            self.rooms[position].loot = Loot(gold=treasure.gold * self.floor, potions=treasure.potions)
         for position in positions[3:]:
             self.rooms[position].enemy = make_enemy(rng)
         self.rooms[self.boss_position].enemy = make_warden()

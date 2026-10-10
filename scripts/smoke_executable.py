@@ -21,7 +21,7 @@ def main() -> int:
         print(f"Executable not found: {executable}", file=sys.stderr)
         return 2
 
-    game, commands, _ = complete_adventure(7)
+    game, commands, _ = complete_adventure(7, floors=5)
     if not game.won:
         raise RuntimeError("The reference adventure did not reach victory.")
     scenarios = [
@@ -32,7 +32,7 @@ def main() -> int:
     with TemporaryDirectory(prefix="thalinor-smoke-") as working_directory:
         for name, command_text, expected in scenarios:
             result = subprocess.run(
-                [str(executable), "--name", "Tarin", "--seed", "7"],
+                [str(executable), "--name", "Tarin", "--seed", "7", "--floors", "5"],
                 cwd=working_directory, input=command_text, text=True,
                 capture_output=True, timeout=90,
             )
@@ -40,8 +40,8 @@ def main() -> int:
                 print(result.stdout)
                 print(result.stderr, file=sys.stderr)
                 raise RuntimeError(f"Executable smoke test failed: {name} (exit {result.returncode})")
-            if name == "full adventure" and "Fighter 2" not in result.stdout:
-                raise RuntimeError("Executable adventure did not reach fighter level 2.")
+            if name == "full adventure" and "Floor 5/5" not in result.stdout:
+                raise RuntimeError("Executable adventure did not reach the fifth floor.")
             print(f"PASS: {name}")
     return 0
 

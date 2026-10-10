@@ -40,6 +40,10 @@ class Player:
     charisma: int = 10
     weapon_name: str = "Longsword"
     weapon_bonus: int = 0
+    armor_bonus: int = 0
+    ward_bonus: int = 0
+    vitality_charm: bool = False
+    ember_stones: int = 0
     second_wind_uses: int = 2
     action_surge_available: bool = True
     hit_dice_remaining: int = 1
@@ -86,7 +90,7 @@ class Player:
     @property
     def armor_class(self) -> int:
         """Chain mail's AC 16 plus the shield's +2 bonus."""
-        return 18
+        return 18 + self.armor_bonus + self.ward_bonus
 
     @property
     def attack_bonus(self) -> int:

@@ -11,9 +11,10 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Conquer your first dungeon in Thalinor.")
     parser.add_argument("--name", default="Adventurer", help="your adventurer's name")
     parser.add_argument("--seed", type=int, help="repeat a dungeon layout and its random events")
+    parser.add_argument("--floors", type=int, choices=range(1, 6), default=5, help="campaign length (1–5 floors)")
     args = parser.parse_args()
     name = args.name.strip() or "Adventurer"
-    game = Game(name=name, seed=args.seed)
+    game = Game(name=name, seed=args.seed, floors=args.floors)
     print("\n".join(game.introduction()))
     try:
         while not game.over:

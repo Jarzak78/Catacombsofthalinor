@@ -2,8 +2,8 @@
 
 Your guild badge is new. Your sword has never faced a monster. Today you
 enter your first dungeon: the forgotten catacombs beneath Thalinor.
-Explore its chambers, gather supplies, and defeat the Warden to return
-as a proven adventurer.
+Explore five increasingly dangerous floors, defeat their guardians, and
+use portals to shop for upgrades before facing the Hollow King.
 
 A turn-based terminal dungeon crawler with a prebuilt fighter and combat
 based on **the revised 2024 D&D 5e rules**. The story and monster statistics
@@ -14,7 +14,7 @@ are original; encounters are balanced for one adventurer.
 ### Windows: double-click the executable
 
 1. Open [Build Windows EXE on GitHub](https://github.com/Jarzak78/Catacombsofthalinor/actions/workflows/windows-exe.yml).
-2. Open the latest successful run for `codex/first-playable-dungeon` (green check).
+2. Open the latest successful run for `codex/dungeon-campaign` (green check).
 3. Under **Artifacts**, download **CatacombsOfThalinor-Windows-x64**.
    GitHub requires you to sign in to download workflow artifacts.
 4. Extract the ZIP and double-click **CatacombsOfThalinor.exe**.
@@ -42,7 +42,8 @@ python3 Main.py --name Tarin
 ```
 
 Use `--seed 7` to repeat a dungeon and its random events. Identical commands
-with the same seed give identical results. Adventures are held in memory;
+with the same seed give identical results. The default campaign has five floors. Use `--floors 1` for a short first-floor
+trial, or `--floors 3` for a three-floor campaign. Adventures are held in memory;
 quitting ends the current run.
 
 Start with `look`, `map`, and `help`. The entrance is safe, and a nearby
@@ -65,6 +66,10 @@ treasure room always holds a magic longsword. Search with `loot` to claim it.
 | `rest` | Spend one hour resting; spend available Hit Dice until healed. |
 | `rest 0`, `rest 1`, `rest 2` | Limit the Hit Dice spent in that one-hour rest. |
 | `long rest` | Rest for eight hours at the entrance. |
+| `portal` | After defeating a guardian, enter its portal to the vendor. |
+| `shop`, `buy <item id>` | View vendor prices and purchase an upgrade or supply. |
+| `descend` | Leave the vendor for the next floor; after the final floor, return home. |
+| `ember` | Consume an Ember stone and an action to deal 3d6 magic damage. |
 | `help`, `quit` | Show instructions or end the adventure. |
 
 Actions do **not** automatically end your turn. For example, you can
@@ -110,11 +115,14 @@ The early +1 longsword increases both attack and damage by one.
 
 ## Scope and dungeon rulings
 
-This first adventure implements melee combat for a **level 1–2 fighter**.
+This campaign implements a selected set of melee rules for a **level 1–5 fighter**,
+including two strikes per Attack action at level 5. Ember stones are an original
+magic item using the game's own rules.
 It does not yet implement character creation, species/background traits,
 origin feats, other classes, spells, ability checks, Tactical Mind,
-grappling, ranged weapons, multiple simultaneous opponents, or later
-fighter features. The available XP keeps this adventure below level 3.
+grappling, ranged weapons, multiple simultaneous opponents, subclasses, feats, or later
+fighter features other than Extra Attack. The complete campaign can reach fighter level 5. Higher-level progression
+statistics exist in the model, but higher-level class features are outside scope.
 
 Combatants fight within five feet; exits are close enough for normal
 movement, including after standing. Leaving combat uses Disengage;
@@ -149,7 +157,7 @@ Pass an explicit seed to reproduce gameplay failures.
 ## Build the Windows executable
 
 GitHub builds a **64-bit Windows console executable** whenever Python source
-or build configuration is pushed to `main` or `codex/first-playable-dungeon`.
+or build configuration is pushed to `main`, `codex/first-playable-dungeon`, or `codex/dungeon-campaign`.
 Once this workflow is on the repository's default branch, GitHub also
 allows **Run workflow** on the Actions page, selecting the game branch.
 Each build runs the test suite and then plays a complete adventure
@@ -169,3 +177,60 @@ in one file and opens a console when launched from File Explorer. Game
 data is embedded in the code, so it works from any folder. PyInstaller
 must build on Windows to produce a Windows EXE; a Linux build cannot be
 renamed to make a Windows application.
+
+
+## Five floors and the portal vendor
+
+The campaign descends through the Forgotten Catacombs, Rootbound Depths,
+Ashen Forge, Starless Vault, and Thalinor's Heart. Each floor has a fresh
+12-room connected map. Enemy HP, Armor Class, attack bonuses, damage, gold,
+and XP increase with depth; the guardians culminate in the Hollow King.
+
+Defeating a guardian clears its floor rather than ending the game. Stand in
+its chamber and type `portal` to teleport to Mira's sanctuary. A safe night's
+rest restores HP, Hit Dice, Second Wind, and Action Surge once per visit.
+Potions and Ember stones are not replenished for free.
+
+Use `shop` to see prices and `buy sword`, `buy armor`, `buy charm`,
+`buy ward`, `buy potion`, or `buy ember` to purchase. Equipment is applied
+immediately. The sword and armor tier improves at deeper vendors. The
+Vitality charm grants +4 maximum and current HP; the Warding ring grants
++1 AC. Both are permanent and can only be bought once. Healing potions
+use a bonus action, and Ember stones use an action for automatic 3d6 damage.
+Insufficient gold, duplicate permanent items, and downgrades never cost gold.
+
+When done shopping, type `descend`. Your character, XP, gold, supplies, and
+equipment carry forward. Old floors close behind you. After the last floor,
+the vendor's departure portal returns you home and completes the campaign.
+Victory is not declared until you choose to leave the final vendor.
+
+## Future graphics and controls
+
+`Main.py` is the terminal adapter. It owns input and printing; the engine
+never opens a window, reads keys, or prints. A graphical or controller
+adapter can use the same engine directly:
+
+```python
+from actions import Action
+from game import Game
+
+game = Game(seed=7)
+state = game.get_state()       # Detached, JSON-compatible rendering data
+messages = game.perform(Action("east"))
+# At the vendor: game.perform(Action("buy", "sword"))
+state = game.get_state()       # Redraw from the updated state
+```
+
+Snapshots expose floor/scene, player equipment/resources, turn budgets,
+visited room descriptions/exits/enemies/loot, portal status, and vendor
+stock with stable item ids. Unvisited room contents are hidden. Reading a
+snapshot does not advance randomness or time; changing it cannot mutate
+the game. Coordinates identify rooms within the current floor. Text
+commands use the same `perform` path as future button or controller input.
+Floor themes and item definitions live separately in `campaign.py`.
+
+This prepares the engine for graphics and controls; graphics assets, a
+window renderer, animations, and controller bindings are future work.
+The test suite includes real five-floor combat, shopping, and a full
+campaign through the terminal launcher. The executable smoke check now
+plays all five floors from outside the checkout.
