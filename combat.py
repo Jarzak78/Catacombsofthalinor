@@ -19,6 +19,22 @@ class AttackResult:
     hit: bool
     critical: bool
     damage: int
+    armor_class: int = 0
+
+    @property
+    def critical_fail(self) -> bool:
+        """Only the selected natural 1 causes a mishap, not a discarded die."""
+        return self.roll == 1
+
+    @property
+    def fumble_damage(self) -> int:
+        """The game's natural-1 house rule causes one point of self-damage."""
+        return 1 if self.critical_fail else 0
+
+    @property
+    def near_miss(self) -> bool:
+        """A normal miss within two points of the target's Armor Class."""
+        return not self.hit and not self.critical_fail and 1 <= self.armor_class - self.total <= 2
 
 
 def roll_dice(rng: random.Random, count: int, sides: int) -> int:
@@ -71,7 +87,7 @@ def roll_attack(
         count, sides = damage_dice
         damage = max(0, roll_dice(rng, count * (2 if critical else 1), sides) + damage_bonus)
 
-    return AttackResult(rolls, roll, total, hit, critical, damage)
+    return AttackResult(rolls, roll, total, hit, critical, damage, armor_class)
 
 
 def roll_initiative(rng: random.Random, bonus: int) -> int:

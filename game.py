@@ -2,6 +2,7 @@
 
 from dataclasses import asdict
 from actions import Action
+from battle_flavor import miss_description
 from campaign import FLOORS, stock
 import random
 
@@ -21,7 +22,8 @@ Portal: portal (after guardian), shop, buy <item id>, descend
 Magic: ember (consumes an action and an Ember stone)
 Other: stats, inventory (i), help (h), quit (q)
 
-Attacks: d20 + attack bonus vs Armor Class. Natural 1 misses; 20 crits.
+Attacks: d20 + attack bonus vs Armor Class. Natural 1 critically fails for 1 self-damage; 20 crits.
+A miss within 1–2 points of AC gets near-miss narration but deals no damage.
 Critical hits double weapon dice, not modifiers. Longsword hits apply Sap.
 Dodge gives attacks against you Disadvantage until your next turn.
 Disengage spends an action and retreats without an opportunity attack.
@@ -245,7 +247,9 @@ class Game:
                  "Ties go to the adventurer."]
         if enemy_roll > hero_roll:
             lines.extend(self.enemy_turn())
-        return [*lines, *self.begin_turn()]
+        if self.enemy is not None or not self.player.is_conscious:
+            lines.extend(self.begin_turn())
+        return lines
 
     def begin_turn(self) -> list[str]:
         self.round_number += 1
@@ -257,7 +261,9 @@ class Game:
             return []
         if not self.player.is_conscious:
             if self.player.stable:
-                return ["You are stable but unconscious. The enemy is still dangerous; type 'end'."]
+                return ["You are stable but unconscious. "
+                        + ("The enemy is still dangerous; type 'end'." if self.enemy
+                           else "The room is safe; type 'end' to recover and wake.")]
             outcome = self.player.death_save(self.rng)
             if outcome == "natural20":
                 return ["Death save: natural 20! You recover 1 HP and rise, spending half your movement.",
@@ -272,7 +278,7 @@ class Game:
         if self.enemy is None or self.actions_remaining <= 0:
             return self.attack_once()
         lines = self.attack_once()
-        if self.player.level >= 5 and self.enemy is not None:
+        if self.player.level >= 5 and self.enemy is not None and self.player.is_conscious:
             self.actions_remaining += 1
             lines.append("Extra Attack: your second longsword strike.")
             lines.extend(self.attack_once())
@@ -288,6 +294,13 @@ class Game:
         result = roll_attack(self.rng, self.player.attack_bonus, enemy.armor_class,
                              (1, 8), self.player.damage_bonus)
         lines = [self.attack_text("You", enemy.name, result)]
+        if result.critical_fail:
+            self.player.take_damage(result.fumble_damage)
+            lines.append(f"Your HP: {self.player.hp}/{self.player.max_hp}.")
+            if self.player.dead:
+                return [*lines, *self.death_message()]
+            if not self.player.is_conscious:
+                return [*lines, "You are unconscious at 0 HP. Type 'end' to continue."]
         if result.hit:
             enemy.take_damage(result.damage)
             self.enemy_sapped = True
@@ -305,7 +318,8 @@ class Game:
         roll = f"d20 [{dice}], total {result.total}"
         if not result.hit:
             verb = "miss" if attacker == "You" else "misses"
-            return f"{attacker} {verb} {defender} ({roll})."
+            description = miss_description(attacker, defender, result)
+            return f"{attacker} {verb} {defender} ({roll})." + (f" {description}" if description else "")
         critical = " Critical hit!" if result.critical else ""
         verb = "hit" if attacker == "You" else "hits"
         return f"{attacker} {verb} {defender} ({roll}) for {result.damage} damage.{critical}"
@@ -342,6 +356,11 @@ class Game:
         )
         self.enemy_sapped = False
         lines = [self.attack_text(enemy.name, "you", result)]
+        if result.critical_fail:
+            enemy.take_damage(result.fumble_damage)
+            lines.append(f"{enemy.name}: {enemy.hp}/{enemy.max_hp} HP.")
+            if not enemy.is_alive:
+                lines.extend(self.defeat_enemy(enemy))
         if result.hit:
             self.player.take_damage(result.damage, critical=result.critical)
         lines.append(f"Your HP: {self.player.hp}/{self.player.max_hp}.")
@@ -358,10 +377,19 @@ class Game:
 
     def end_turn(self) -> list[str]:
         if self.enemy is None:
+            if not self.player.dead and not self.player.is_conscious:
+                if self.player.stable:
+                    hours = self.rng.randint(1, 4)
+                    self.elapsed_minutes += hours * 60
+                    self.player.heal(1)
+                    return [f"With the room safe, you recover for {hours} hour(s) and wake with 1 HP.",
+                            *self.status()]
+                self.elapsed_minutes += 0.1
+                return self.begin_turn()
             return ["There is no combat turn to end. Explore or rest."]
         self.elapsed_minutes += 0.1
         lines = self.enemy_turn()
-        if not self.player.dead:
+        if not self.player.dead and (self.enemy is not None or not self.player.is_conscious):
             lines.extend(self.begin_turn())
         return lines
 

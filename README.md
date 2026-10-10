@@ -84,6 +84,8 @@ Informational and invalid commands spend no actions.
   The adventurer wins ties as this game's chosen DM ruling.
 - Attacks roll `d20 + Strength modifier + proficiency + magic weapon bonus`
   against Armor Class. Natural 1 always misses; natural 20 always hits.
+  As a game house rule, a natural 1 also causes 1 HP of self-damage to
+  the attacker and a comic mishap description.
 - Advantage and Disadvantage roll two d20s and use the higher or lower;
   having both cancels them.
 - A one-handed longsword deals `1d8 + Strength + 2` with the Dueling style,
@@ -241,3 +243,26 @@ the upper seals lead to a binding grove, its sustaining forge, a royal
 prison, and finally the truth beneath Thalinor's throne. Room lore lives
 in `floor_lore.py`; graphical interfaces can read the current chapter
 from the snapshot's `story` field.
+
+## Near misses and critical failures
+
+A missed attack whose **total, including bonuses**, is one or two points
+below the target's Armor Class receives a near-miss description. For
+example, a total of 18 or 19 against AC 20 glances off armor without
+dealing damage. Meeting AC 20 is still a hit. Both player and enemy
+attacks receive narration suited to the combatant.
+
+A **natural 1 on the d20 used for the attack** is a critical fail: the
+attack misses, the attacker suffers a comic slip or stumble, and loses
+**1 HP**. This is the game's house rule, added to the normal natural-1
+miss. Advantage/disadvantage uses the selected die; a discarded 1 does
+not trigger the mishap. Death-save natural 1s keep their existing rules
+and do not cause this attack penalty.
+
+Self-damage can knock an adventurer unconscious or defeat a monster. An
+unconscious adventurer cannot make their second Extra Attack. A monster
+that defeats itself still grants XP/gold once, and a guardian still
+opens its floor's portal. If combat ends while you are unconscious,
+`end` continues death saves; once stable in the safe room, another `end`
+passes 1d4 recovery hours and restores 1 HP. Flavor text and fixed mishap
+damage consume no extra dice rolls, keeping seeded play reproducible.
