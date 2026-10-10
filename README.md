@@ -49,6 +49,12 @@ quitting ends the current run.
 Start with `look`, `map`, and `help`. The entrance is safe, and a nearby
 treasure room always holds a magic longsword. Search with `loot` to claim it.
 
+Entering a room with a living foe shows only combat information: the enemy,
+initiative, any ambush result, your turn, and combat commands. Room descriptions,
+exits, treasure, and documents wait until the fight is over. During combat,
+`look` keeps the same focused view. After victory, type `look` to examine the
+room and discover what you can collect.
+
 ## Commands
 
 | Command | Effect |

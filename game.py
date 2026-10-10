@@ -44,6 +44,7 @@ fighter can spend Hit Dice to heal. 'rest 0' saves your dice; 'rest 1' caps
 spending at one die. Plain 'rest' spends dice until healed or out of dice.
 Long rests restore HP and all resources.
 At 0 HP you are unconscious: 'end' lets combat and death saves continue.
+Hostile rooms show combat only. After victory, use 'look' to examine the room.
 Collect treasure with 'loot'. Defeat each guardian, then use 'portal' to shop."""
 
 ALIASES = {
@@ -118,24 +119,13 @@ class Game:
             return ["The Lantern Between Worlds", "A portal brings you to Mira, the enchanted outfitter.",
                     "Use 'shop', 'buy <item id>', and 'descend' when ready.",
                     "Your journal is here too: use 'journal' and 'read <number>'."]
+        if self.enemy:
+            return [self.foe_summary(), self.combat_options()]
         lines = [f"Floor {self.floor}/{self.total_floors}: {self.dungeon.theme.name}",
                  self.room.name, self.room.description]
         if self.floor_cleared and self.position == self.dungeon.boss_position:
             lines.append("A glowing portal is open. Type 'portal' to visit the vendor.")
-        enemy = self.enemy
-        if enemy:
-            lines.append(f"{enemy.name} blocks your way! HP {enemy.hp}/{enemy.max_hp}, "
-                         f"AC {enemy.armor_class}.")
-            lines.append("Attack, dodge, use a bonus action, or disengage; 'end' finishes your turn.")
-            if self.foe_examined:
-                lines.append("Type 'examine' to reread your observations for free.")
-            elif self.free_examine_available:
-                lines.append("Type 'examine' before your first action to study this foe for free.")
-            elif self.initiative_result is None:
-                lines.append("Initiative decides whether your opening examination is free.")
-            else:
-                lines.append("Type 'examine' to study this foe for one action.")
-        elif self.room.enemy:
+        if self.room.enemy:
             lines.append(f"The defeated {self.room.enemy.name} lies still.")
         if self.room.loot and not self.room.looted:
             lines.append("You spot unclaimed treasure. Use 'loot' when the room is safe.")
@@ -143,6 +133,23 @@ class Game:
             lines.append(f"You spot a document: {self.room.note.title}. Use 'loot' to collect it once the room is safe.")
         lines.append("Exits: " + ", ".join(self.room.exits))
         return lines
+
+    def foe_summary(self) -> str:
+        enemy = self.enemy
+        return f"{enemy.name} blocks your way! HP {enemy.hp}/{enemy.max_hp}, AC {enemy.armor_class}."
+
+    def combat_options(self) -> str:
+        if not self.player.is_conscious:
+            return "You are unconscious. Type 'end' to continue combat."
+        if self.foe_examined:
+            cost = "reread free"
+        elif self.free_examine_available:
+            cost = "free before your first action"
+        elif self.initiative_result is None:
+            cost = "initiative decides the opening cost"
+        else:
+            cost = "1 action"
+        return f"Combat: attack, dodge, potion, wind, flee, end; examine ({cost})."
 
     def status(self) -> list[str]:
         player = self.player
@@ -295,10 +302,13 @@ class Game:
         self.clear_encounter()
         self.room.visited = True
         self.elapsed_minutes += 1
-        lines = self.describe_room()
         if self.enemy:
+            lines = [self.foe_summary()]
             lines.extend(self.begin_encounter())
-        return lines
+            if self.enemy and self.player.is_conscious:
+                lines.append(self.combat_options())
+            return lines
+        return self.describe_room()
 
     def begin_encounter(self) -> list[str]:
         self.clear_encounter()
@@ -330,8 +340,7 @@ class Game:
             lines.extend(self.enemy_turn())
         else:
             self.free_examine_available = True
-            lines.append("You act first! Type 'examine' before spending your first action "
-                         "to study your foe for free. You may also attack immediately.")
+            lines.append("You act first! 'examine' is free before your first action.")
         if self.enemy is not None or not self.player.is_conscious:
             lines.extend(self.begin_turn())
         return lines
@@ -432,6 +441,7 @@ class Game:
                           "Type 'portal' to visit Mira's shop, then 'descend' when ready."])
             if self.room.note and not self.room.note_collected:
                 lines.append("A guardian document remains here. Use 'loot' before taking the portal.")
+        lines.append("The room is safe. Type 'look' to examine it.")
         return lines
 
     def enemy_turn(self) -> list[str]:
