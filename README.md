@@ -55,6 +55,11 @@ exits, treasure, and documents wait until the fight is over. During combat,
 `look` keeps the same focused view. After victory, type `look` to examine the
 room and discover what you can collect.
 
+In a safe room, `look` also describes the hiding place and lists the exact
+unclaimed gold, potions, or equipment there. It previews your find without
+collecting or equipping anything; use `loot` to take it. Collected treasure
+disappears from later room previews, while uncollected documents remain visible.
+
 Successful `loot` searches describe where you uncover the find: abandoned
 packs, burial chests, offerings, and other hiding places suited to each room
 and floor. Treasure and documents share one discovery description when found

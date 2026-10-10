@@ -5,7 +5,7 @@ from actions import Action
 from battle_flavor import hit_description, miss_description
 from campaign import FLOORS, stock
 from lore_notes import LoreNote
-from loot_flavor import discovery_description
+from loot_flavor import discovery_description, preview_description
 import random
 
 from combat import AttackResult, roll_attack, roll_initiative, roll_dice
@@ -46,6 +46,7 @@ spending at one die. Plain 'rest' spends dice until healed or out of dice.
 Long rests restore HP and all resources.
 At 0 HP you are unconscious: 'end' lets combat and death saves continue.
 Hostile rooms show combat only. After victory, use 'look' to examine the room.
+In a safe room, 'look' describes unclaimed loot; 'loot' collects it.
 Collect treasure with 'loot'. Defeat each guardian, then use 'portal' to shop."""
 
 ALIASES = {
@@ -128,9 +129,22 @@ class Game:
             lines.append("A glowing portal is open. Type 'portal' to visit the vendor.")
         if self.room.enemy:
             lines.append(f"The defeated {self.room.enemy.name} lies still.")
-        if self.room.loot and not self.room.looted:
-            lines.append("You spot unclaimed treasure. Use 'loot' when the room is safe.")
-        if self.room.note and not self.room.note_collected:
+        loot = self.room.loot
+        has_treasure = (loot is not None and not self.room.looted
+                        and bool(loot.gold or loot.potions or loot.weapon_name))
+        has_note = self.room.note is not None and not self.room.note_collected
+        if has_treasure or has_note:
+            lines.append(preview_description(self.room, self.floor))
+        if has_treasure:
+            contents = []
+            if loot.gold:
+                contents.append(f"{loot.gold} gold")
+            if loot.potions:
+                contents.append(f"{loot.potions} healing potion" + ("s" if loot.potions != 1 else ""))
+            if loot.weapon_name:
+                contents.append(f"{loot.weapon_name} (magic bonus +{loot.weapon_bonus})")
+            lines.append("Unclaimed loot: " + "; ".join(contents) + ". Type 'loot' to collect it.")
+        if has_note:
             lines.append(f"You spot a document: {self.room.note.title}. Use 'loot' to collect it once the room is safe.")
         lines.append("Exits: " + ", ".join(self.room.exits))
         return lines
