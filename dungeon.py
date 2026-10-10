@@ -2,6 +2,7 @@
 
 from campaign import FLOORS
 from floor_lore import LORE
+from lore_notes import NOTES
 from collections import deque
 import random
 
@@ -40,6 +41,10 @@ class Dungeon:
         self._create_rooms(rng)
         self._connect_rooms(rng)
         self._place_contents(rng)
+        # Place authored documents in their matching rooms without extra RNG.
+        by_name = {room.name: room for room in self.rooms.values()}
+        for note in NOTES[floor]:
+            by_name[note.room_name].note = note
         depth = floor - 1
         for room in self.rooms.values():
             if room.enemy:
@@ -166,6 +171,8 @@ class Dungeon:
                     marker = "B" if room.enemy.boss else "E"
                 elif room.loot and not room.looted:
                     marker = "$"
+                elif room.note and not room.note_collected:
+                    marker = "N"
                 else:
                     marker = "."
                 room_line.append(marker)

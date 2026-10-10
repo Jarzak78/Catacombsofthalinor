@@ -55,7 +55,9 @@ treasure room always holds a magic longsword. Search with `loot` to claim it.
 | --- | --- |
 | `north`, `south`, `east`, `west` | Move through a passage; `n/s/e/w` also work. |
 | `look`, `map`, `stats`, `inventory` | Inspect your surroundings or character. |
-| `loot` | Collect treasure once the room is safe. |
+| `loot` | Collect treasure and lore documents once the room is safe. |
+| `journal` | List your collected notes with journal numbers. |
+| `read`, `read 1`, `read <note id>` | Read the latest note, a numbered note, or a collected note by its id. |
 | `attack` / `a` | Use an action for a longsword attack. |
 | `dodge` / `d` | Use an action to impose Disadvantage on enemy attacks until your next turn. |
 | `disengage` / `flee` / `f` | Use an action and movement to retreat without an opportunity attack. |
@@ -266,3 +268,37 @@ opens its floor's portal. If combat ends while you are unconscious,
 `end` continues death saves; once stable in the safe room, another `end`
 passes 1d4 recovery hours and restores 1 HP. Flavor text and fixed mishap
 damage consume no extra dice rolls, keeping seeded play reproducible.
+
+## Collectible lore and the journal
+
+Twenty authored documents tell the dungeon's history as you descend: four
+on each floor, placed at its entrance, two exploration rooms, and the
+guardian's chamber. Letters, watch orders, ledgers, and personal testimony
+reveal the people behind the seals and the deeper threat. Each document
+also includes a practical adventurer's clue.
+
+`look` calls attention to documents in the current room. Once the room is
+safe, `loot` collects both notes and any treasure in one search. You can
+collect a note in a room with no treasure or whose treasure was already
+claimed. Each note is collected once; guardians must be defeated before
+searching their chambers. The map uses `N` for visited rooms with an
+uncollected note, unless an enemy or treasure marker takes precedence.
+
+Collection prints an exact reading command, such as `read 1`. Use
+`journal` to browse numbered titles, floors, and stable note ids. `read 1`
+opens the first note, `read <note id>` opens a collected note by id, and
+plain `read` opens the most recently collected document. Reading does
+not spend combat actions, advance game time, or roll dice. You can
+reread collected notes during combat or in Mira's shop.
+
+The journal carries forward between floors for this adventure. Search
+the guardian's chamber and any remaining rooms before taking its portal:
+old floors cannot be revisited. Notes are optional; they never block a
+portal or victory. Like the rest of the adventure, the journal currently
+lives in memory and is not saved when you close the game.
+
+Authored text and clues live in `lore_notes.py`. The engine snapshot
+exposes full text only for collected notes in `journal`; visited room
+notes expose their title/id and collection flag, and unexplored rooms
+reveal no documents. Future graphical journal panels can use the same
+`Action("read", "1")` input as the terminal command.

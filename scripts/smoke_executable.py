@@ -22,10 +22,13 @@ def main() -> int:
         return 2
 
     game, commands, _ = complete_adventure(7, floors=5)
+    if len(game.journal) != 20:
+        raise RuntimeError("The reference adventure did not collect all twenty lore notes.")
     if not game.won:
         raise RuntimeError("The reference adventure did not reach victory.")
     scenarios = [
         ("full adventure", "\n".join(commands) + "\n", "Your first dungeon is conquered"),
+        ("collect and read lore", "loot\njournal\nread 1\nquit\n", "Adventurer's clue:"),
         ("commands and quit", "help\nstats\nquit\n", "You leave the trial for another day"),
         ("closed input", "", "You leave the trial for another day"),
     ]

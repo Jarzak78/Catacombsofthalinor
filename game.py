@@ -4,6 +4,7 @@ from dataclasses import asdict
 from actions import Action
 from battle_flavor import miss_description
 from campaign import FLOORS, stock
+from lore_notes import LoreNote
 import random
 
 from combat import AttackResult, roll_attack, roll_initiative, roll_dice
@@ -14,6 +15,7 @@ from utils import health_bar
 
 
 HELP = """Explore: north/south/east/west (n/s/e/w), look, map, loot
+Lore: journal, read (latest note), read <journal number or note id>
 Actions: attack (a), dodge (d), disengage (flee/f)
 Bonus actions: potion (p), second wind (wind)
 Turn control: end, action surge (surge; fighter level 2)
@@ -61,6 +63,7 @@ class Game:
         self.rng = random.Random(seed)
         self.dungeon = Dungeon(self.rng)
         self.player = Player(name=name)
+        self.journal: list[LoreNote] = []
         self.position = self.dungeon.start
         self.previous_position: tuple[int, int] | None = None
         self.room.visited = True
@@ -96,6 +99,7 @@ class Game:
             f"Conquer {self.total_floors} dungeon floors; portals lead to a vendor between floors.",
             "Explore, gather supplies, and grow stronger before challenging him.",
             "Type 'help' for commands. Your starting pack holds three healing potions.",
+            "Search with 'loot' for notes as well as treasure. Use 'journal' and 'read 1' to read them.",
             "Combat uses revised 2024 5e rules; type 'end' to finish your turn.",
             "", self.dungeon.lore.arrival, "", *self.describe_room(),
         ]
@@ -103,7 +107,8 @@ class Game:
     def describe_room(self) -> list[str]:
         if self.in_shop:
             return ["The Lantern Between Worlds", "A portal brings you to Mira, the enchanted outfitter.",
-                    "Use 'shop', 'buy <item id>', and 'descend' when ready."]
+                    "Use 'shop', 'buy <item id>', and 'descend' when ready.",
+                    "Your journal is here too: use 'journal' and 'read <number>'."]
         lines = [f"Floor {self.floor}/{self.total_floors}: {self.dungeon.theme.name}",
                  self.room.name, self.room.description]
         if self.floor_cleared and self.position == self.dungeon.boss_position:
@@ -117,6 +122,8 @@ class Game:
             lines.append(f"The defeated {self.room.enemy.name} lies still.")
         if self.room.loot and not self.room.looted:
             lines.append("You spot unclaimed treasure. Use 'loot' when the room is safe.")
+        if self.room.note and not self.room.note_collected:
+            lines.append(f"You spot a document: {self.room.note.title}. Use 'loot' to collect it once the room is safe.")
         lines.append("Exits: " + ", ".join(self.room.exits))
         return lines
 
@@ -147,19 +154,22 @@ class Game:
 
     def handle_command(self, raw: str) -> list[str]:
         """Execute one command without spending turns on invalid input."""
-        if self.over:
-            return ["This adventure is over. Run Main.py to begin another."]
         command = " ".join(raw.lower().split())
         if command.startswith(("go ", "move ")):
             command = command.split(" ", 1)[1]
         command = ALIASES.get(command, command)
-        if command.startswith(("buy ", "rest ")):
+        if command.startswith(("buy ", "rest ", "read ")):
             kind, argument = command.split(" ", 1)
             return self.perform(Action(kind, argument))
         return self.perform(Action(command))
 
     def perform(self, action: Action) -> list[str]:
         """Execute a device-independent action; GUIs call this directly."""
+        # Journal inspection is informational in every scene, even after victory.
+        if action.kind == "journal" and not action.argument:
+            return self.journal_lines()
+        if action.kind == "read":
+            return self.read_note(action.argument)
         if self.over:
             return ["This adventure is over. Run Main.py to begin another."]
         command = action.kind
@@ -173,14 +183,15 @@ class Game:
             if self.in_shop:
                 return ["You are in the vendor sanctuary, outside the dungeon."]
             return [*self.dungeon.map_lines(self.position),
-                    "@ you | ? unexplored | . explored | E enemy | B Warden | $ treasure"]
+                    "@ you | ? unexplored | . explored | E enemy | B guardian | $ treasure | N note"]
         if command == "stats":
             return self.status()
         if command == "inventory":
             return [f"Weapon: {self.player.weapon_name} (magic bonus +{self.player.weapon_bonus})",
                     f"Armor: runic bonus +{self.player.armor_bonus} | Warding ring +{self.player.ward_bonus}",
                     f"Vitality charm: {self.player.vitality_charm} | Ember stones: {self.player.ember_stones}",
-                    f"Healing potions: {self.player.potions} | Gold: {self.player.gold}"]
+                    f"Healing potions: {self.player.potions} | Gold: {self.player.gold}",
+                    f"Collected notes: {len(self.journal)}. Type 'journal' to browse."]
         if command == "quit":
             self.quit_requested = True
             return ["You leave the trial for another day. Your first dungeon can wait."]
@@ -340,6 +351,8 @@ class Game:
             lines.extend([self.dungeon.lore.revelation,
                           f"Floor {self.floor} cleared! A portal opens beside the fallen guardian.",
                           "Type 'portal' to visit Mira's shop, then 'descend' when ready."])
+            if self.room.note and not self.room.note_collected:
+                lines.append("A guardian document remains here. Use 'loot' before taking the portal.")
         return lines
 
     def enemy_turn(self) -> list[str]:
@@ -490,18 +503,57 @@ class Game:
                 "HP, Hit Dice, Second Wind, and Action Surge are restored.", *self.status()]
 
     def collect_loot(self) -> list[str]:
+        if self.in_shop:
+            return ["You are at the vendor. Search dungeon rooms for notes and treasure."]
+        if not self.player.is_conscious:
+            return ["You must be conscious to search for notes and treasure."]
         if self.enemy:
-            return ["Defeat the enemy before searching for treasure."]
+            return ["Defeat the enemy before searching for notes and treasure."]
+        lines = []
         loot = self.room.loot
-        if loot is None or self.room.looted:
-            return ["There is no unclaimed treasure here."]
-        self.room.looted = True
-        self.player.gold += loot.gold
-        self.player.potions += loot.potions
-        lines = [f"You collect {loot.gold} gold and {loot.potions} healing potion(s)."]
-        if loot.weapon_name and self.player.equip_weapon(loot.weapon_name, loot.weapon_bonus):
-            lines.append(f"You equip {loot.weapon_name} (+{loot.weapon_bonus} to attack and damage).")
-        return lines
+        if loot is not None and not self.room.looted:
+            self.room.looted = True
+            self.player.gold += loot.gold
+            self.player.potions += loot.potions
+            lines.append(f"You collect {loot.gold} gold and {loot.potions} healing potion(s).")
+            if loot.weapon_name and self.player.equip_weapon(loot.weapon_name, loot.weapon_bonus):
+                lines.append(f"You equip {loot.weapon_name} (+{loot.weapon_bonus} to attack and damage).")
+        note = self.room.note
+        if note is not None and not self.room.note_collected:
+            self.room.note_collected = True
+            if not any(entry.id == note.id for entry in self.journal):
+                self.journal.append(note)
+                lines.append(f"You collect '{note.title}' and add it to your journal.")
+                lines.append(f"Type 'read {len(self.journal)}' to read it, or 'journal' to browse your notes.")
+        return lines or ["There are no unclaimed notes or treasure here."]
+
+    def journal_lines(self) -> list[str]:
+        if not self.journal:
+            return ["Your journal has no collected notes yet. Search dungeon rooms with 'loot'."]
+        return [f"Adventurer's journal — {len(self.journal)} collected note(s)",
+                *(f"{index}. {note.title} (Floor {note.floor}; id: {note.id}) — read {index}"
+                  for index, note in enumerate(self.journal, 1)),
+                "Use 'read <number>', 'read <note id>', or 'read' for your latest note."]
+
+    def read_note(self, argument: str = "") -> list[str]:
+        if not self.journal:
+            return ["You have no collected notes to read. Search rooms with 'loot' first."]
+        query = argument.strip().lower()
+        note = None
+        if not query:
+            note = self.journal[-1]
+        else:
+            try:
+                number = int(query)
+            except ValueError:
+                note = next((entry for entry in self.journal if entry.id == query), None)
+            else:
+                if 1 <= number <= len(self.journal):
+                    note = self.journal[number - 1]
+        if note is None:
+            return ["That note is not in your journal. Type 'journal' to see collected note numbers and ids."]
+        return [f"{note.title} | Floor {note.floor} | {note.room_name}", "", note.text,
+                "", f"Adventurer's clue: {note.hint}"]
 
 
     def enter_portal(self) -> list[str]:
@@ -611,7 +663,9 @@ class Game:
                 data.update(name=room.name, description=room.description,
                             exits={k: list(v) for k, v in room.exits.items()},
                             enemy=asdict(room.enemy) if room.enemy else None,
-                            loot=asdict(room.loot) if room.loot and not room.looted else None)
+                            loot=asdict(room.loot) if room.loot and not room.looted else None,
+                            note={"id": room.note.id, "title": room.note.title} if room.note else None,
+                            note_collected=room.note_collected)
             rooms.append(data)
         return {"floor": self.floor, "total_floors": self.total_floors,
                 "theme": self.dungeon.theme.name,
@@ -619,6 +673,7 @@ class Game:
                           "revelation": self.dungeon.lore.revelation if self.floor_cleared else None},
                 "scene": "shop" if self.in_shop else "dungeon",
                 "position": list(self.position), "player": asdict(self.player),
+                "journal": [asdict(note) for note in self.journal],
                 "armor_class": self.player.armor_class, "attack_bonus": self.player.attack_bonus,
                 "rooms": rooms, "portal_open": self.floor_cleared,
                 "portal_position": list(self.dungeon.boss_position) if self.floor_cleared else None,
