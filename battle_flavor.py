@@ -2,6 +2,100 @@
 from combat import AttackResult
 
 
+def _enemy_traits(name: str) -> tuple[str, str]:
+    """Return a strike and a surface for the campaign's original creatures."""
+    lowered = name.lower()
+    if "rat" in lowered or "stalker" in lowered:
+        return "claw swipe", "tough hide"
+    if "sentinel" in lowered:
+        return "thorny root lash", "tangled bark and roots"
+    if "colossus" in lowered:
+        return "heated iron fist strike", "iron plating"
+    if "hollow king" in lowered:
+        return "surge of cold darkness", "shadow-wrapped form"
+    if "warden" in lowered or "knight" in lowered:
+        return "blade strike", "ancient armor"
+    if "bone sentry" in lowered:
+        return "rusted weapon strike", "bony frame"
+    return "strike", "defenses"
+
+
+def hit_description(attacker: str, defender: str, result: AttackResult) -> str:
+    """Narrate a hit's rolled damage without changing rules or spending RNG.
+
+    Damage bands stay the same as equipment and enemies improve: 1-5 is
+    glancing, 6-10 solid, 11-15 heavy, and 16+ devastating. A high attack
+    roll or a nearly defeated target does not make a low-damage hit heavy.
+    Critical hits have extra precision narration within their damage band.
+    """
+    if not result.hit:
+        return ""
+    if result.damage == 0:
+        if attacker == "You":
+            story = f"Your sword connects with {defender}, but cannot bite through its defenses."
+        else:
+            story = f"{attacker}'s blow connects, but your armor absorbs the impact."
+        if result.critical:
+            story += " Even this perfectly placed strike causes no injury."
+        return f"{story} No damage is dealt."
+
+    if result.damage <= 5:
+        band, label = 0, "Glancing blow!"
+    elif result.damage <= 10:
+        band, label = 1, "Solid blow!"
+    elif result.damage <= 15:
+        band, label = 2, "Heavy blow!"
+    else:
+        band, label = 3, "Devastating blow!"
+
+    # Existing roll data chooses the prose; adding narration never changes
+    # subsequent initiative, attack, damage, loot, or dungeon rolls.
+    variant = (result.total + result.damage) % 2
+    if attacker == "You":
+        _, surface = _enemy_traits(defender)
+        stories = (
+            (
+                f"Your sword just grazes {defender}'s {surface}, leaving a shallow mark.",
+                f"Only the tip of your longsword catches {defender}'s {surface}; the cut is slight.",
+            ),
+            (
+                f"Your longsword bites firmly into {defender}'s {surface} with a sharp crack.",
+                f"You drive a clean sword stroke through {defender}'s guard, landing a telling cut.",
+            ),
+            (
+                f"Your blade tears deep into {defender}'s {surface}; the impact rings through the chamber.",
+                f"You put your weight behind the longsword, carving a deep gash through {defender}'s {surface}.",
+            ),
+            (
+                f"Your longsword crashes through {defender}'s {surface} in a tremendous cleaving blow.",
+                f"Your blade lands with crushing force against {defender}; the sound booms beneath the vaulted ceiling.",
+            ),
+        )
+        critical_story = " Your blade finds a weak point with perfect timing."
+    else:
+        strike, _ = _enemy_traits(attacker)
+        stories = (
+            (
+                f"{attacker}'s {strike} grazes you, sending a brief sting through your armor.",
+                f"Only the edge of {attacker}'s {strike} connects, leaving a small but painful wound.",
+            ),
+            (
+                f"A well-placed {strike} from {attacker} lands squarely, driving a sharp jolt through you.",
+                f"{attacker} slips a {strike} past your defenses, landing a telling blow.",
+            ),
+            (
+                f"{attacker} delivers a punishing {strike}; its force carries deep through your defenses.",
+                f"A brutal {strike} from {attacker} slams into you with a sickening impact.",
+            ),
+            (
+                f"{attacker} unleashes a thunderous {strike}; the impact echoes through the chamber.",
+                f"{attacker}'s {strike} lands with overwhelming force, driving pain through your entire body.",
+            ),
+        )
+        critical_story = " The strike catches you at an exposed angle."
+    return f"{label} {stories[band][variant]}" + (critical_story if result.critical else "")
+
+
 def miss_description(attacker: str, defender: str, result: AttackResult) -> str:
     if result.critical_fail:
         if attacker == "You":

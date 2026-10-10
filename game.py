@@ -2,7 +2,7 @@
 
 from dataclasses import asdict
 from actions import Action
-from battle_flavor import miss_description
+from battle_flavor import hit_description, miss_description
 from campaign import FLOORS, stock
 from lore_notes import LoreNote
 import random
@@ -26,6 +26,7 @@ Other: stats, inventory (i), help (h), quit (q)
 
 Attacks: d20 + attack bonus vs Armor Class. Natural 1 critically fails for 1 self-damage; 20 crits.
 A miss within 1–2 points of AC gets near-miss narration but deals no damage.
+Hit descriptions reflect damage: glancing 1–5, solid 6–10, heavy 11–15, devastating 16+.
 Critical hits double weapon dice, not modifiers. Longsword hits apply Sap.
 Dodge gives attacks against you Disadvantage until your next turn.
 Disengage spends an action and retreats without an opportunity attack.
@@ -333,7 +334,8 @@ class Game:
             return f"{attacker} {verb} {defender} ({roll})." + (f" {description}" if description else "")
         critical = " Critical hit!" if result.critical else ""
         verb = "hit" if attacker == "You" else "hits"
-        return f"{attacker} {verb} {defender} ({roll}) for {result.damage} damage.{critical}"
+        description = hit_description(attacker, defender, result)
+        return f"{attacker} {verb} {defender} ({roll}) for {result.damage} damage.{critical} {description}"
 
     def defeat_enemy(self, enemy: Enemy) -> list[str]:
         self.player.gold += enemy.gold_reward

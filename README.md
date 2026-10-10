@@ -92,6 +92,11 @@ Informational and invalid commands spend no actions.
   having both cancels them.
 - A one-handed longsword deals `1d8 + Strength + 2` with the Dueling style,
   plus its magic bonus. Critical hits double dice and add modifiers once.
+- Successful player and monster attacks get descriptions based on the damage
+  rolled: **glancing** (1–5), **solid** (6–10), **heavy** (11–15), or
+  **devastating** (16+). Swords, claws, roots, iron fists, and the Hollow
+  King's darkness have distinct wording; critical hits add precision detail.
+  These descriptions add no damage, conditions, or extra random rolls.
 - Longsword **Sap** applies Disadvantage to the target's next attack before
   the fighter's next turn. It does not stack or persist indefinitely.
 - Second Wind starts with two uses. A short rest restores one use; a long
