@@ -1,0 +1,52 @@
+name: Build Windows EXE
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - codex/first-playable-dungeon
+    paths:
+      - '**.py'
+      - requirements-build.txt
+      - .github/workflows/windows-exe.yml
+
+permissions:
+  contents: read
+
+jobs:
+  windows-exe:
+    name: Build and test Windows executable
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out the game
+        uses: actions/checkout@v4
+
+      - name: Set up 64-bit Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          architecture: x64
+          cache: pip
+          cache-dependency-path: requirements-build.txt
+
+      - name: Install build tools
+        run: python -m pip install -r requirements-build.txt
+
+      - name: Run the game tests
+        run: python -m unittest discover -v
+
+      - name: Build the standalone console executable
+        run: python scripts/build_windows.py
+
+      - name: Play a complete adventure through the executable
+        run: python scripts/smoke_executable.py dist/CatacombsOfThalinor.exe
+
+      - name: Upload the Windows download
+        uses: actions/upload-artifact@v4
+        with:
+          name: CatacombsOfThalinor-Windows-x64
+          path: dist/CatacombsOfThalinor.exe
+          if-no-files-found: error
+          retention-days: 30

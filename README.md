@@ -11,7 +11,28 @@ are original; encounters are balanced for one adventurer.
 
 ## Play
 
-Requires **Python 3.10 or newer**. All dependencies are in the standard
+### Windows: double-click the executable
+
+1. Open [Build Windows EXE on GitHub](https://github.com/Jarzak78/Catacombsofthalinor/actions/workflows/windows-exe.yml).
+2. Open the latest successful run for `codex/first-playable-dungeon` (green check).
+3. Under **Artifacts**, download **CatacombsOfThalinor-Windows-x64**.
+   GitHub requires you to sign in to download workflow artifacts.
+4. Extract the ZIP and double-click **CatacombsOfThalinor.exe**.
+
+The game opens in its own console window. Python is bundled, so you do not
+need to install Python or VS Code: you only need the executable. After quitting, winning,
+or dying, press Enter to close the window. Artifact downloads remain
+available for 30 days; a new successful build refreshes the download.
+
+You can also launch it from a Windows terminal with options:
+
+```powershell
+.\CatacombsOfThalinor.exe --name Tarin --seed 7
+```
+
+### Run the Python source
+
+The source requires **Python 3.10 or newer**. All runtime dependencies are in the standard
 library; no package installation, account, network connection, or server
 is needed.
 
@@ -124,3 +145,26 @@ adventures, and a full adventure through the actual command-line entry point.
 `combat.py` resolves dice; `player.py` tracks character resources;
 `dungeon.py` generates the map; the room and loot libraries define content.
 Pass an explicit seed to reproduce gameplay failures.
+
+## Build the Windows executable
+
+GitHub builds a **64-bit Windows console executable** whenever Python source
+or build configuration is pushed to `main` or `codex/first-playable-dungeon`.
+You can also use **Run workflow** on the Actions page, selecting the game
+branch. Each build runs the test suite and then plays a complete adventure
+through the actual executable from outside the checkout before uploading it.
+
+To build on your own Windows computer, install **64-bit Python 3.12**, open
+a terminal in the source folder, and run:
+
+```powershell
+python -m pip install -r requirements-build.txt
+python scripts/build_windows.py
+python scripts/smoke_executable.py dist/CatacombsOfThalinor.exe
+```
+
+The output is `dist/CatacombsOfThalinor.exe`. It bundles Python and the game
+in one file and opens a console when launched from File Explorer. Game
+data is embedded in the code, so it works from any folder. PyInstaller
+must build on Windows to produce a Windows EXE; a Linux build cannot be
+renamed to make a Windows application.

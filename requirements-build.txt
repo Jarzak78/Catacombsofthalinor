@@ -1,0 +1,2 @@
+# Windows executable packaging; gameplay itself has no external dependencies.
+PyInstaller==6.16.0
