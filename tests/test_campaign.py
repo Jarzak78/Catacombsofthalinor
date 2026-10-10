@@ -6,6 +6,7 @@ import sys
 import unittest
 from copy import deepcopy
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 from actions import Action
 from dungeon import Dungeon
@@ -194,9 +195,10 @@ class CampaignTests(unittest.TestCase):
         game, commands, _ = complete_adventure(7, floors=5)
         self.assertTrue(game.won)
         launcher = Path(__file__).resolve().parents[1] / 'Main.py'
-        result = subprocess.run([sys.executable, str(launcher), '--name', 'Tarin', '--seed', '7'],
-                                cwd='/tmp', input='\n'.join(commands)+'\n', text=True,
-                                capture_output=True, timeout=10)
+        with TemporaryDirectory() as directory:
+            result = subprocess.run([sys.executable, str(launcher), '--name', 'Tarin', '--seed', '7'],
+                                    cwd=directory, input='\n'.join(commands)+'\n', text=True,
+                                    capture_output=True, timeout=10)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stderr, '')
         self.assertIn('Your first dungeon is conquered', result.stdout)
