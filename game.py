@@ -95,7 +95,7 @@ class Game:
             "Explore, gather supplies, and grow stronger before challenging him.",
             "Type 'help' for commands. Your starting pack holds three healing potions.",
             "Combat uses revised 2024 5e rules; type 'end' to finish your turn.",
-            "", *self.describe_room(),
+            "", self.dungeon.lore.arrival, "", *self.describe_room(),
         ]
 
     def describe_room(self) -> list[str]:
@@ -323,7 +323,8 @@ class Game:
                 lines.append("Action Surge is unlocked: one extra action, once per short or long rest.")
         if enemy.boss:
             self.floor_cleared = True
-            lines.extend([f"Floor {self.floor} cleared! A portal opens beside the fallen guardian.",
+            lines.extend([self.dungeon.lore.revelation,
+                          f"Floor {self.floor} cleared! A portal opens beside the fallen guardian.",
                           "Type 'portal' to visit Mira's shop, then 'descend' when ready."])
         return lines
 
@@ -545,7 +546,8 @@ class Game:
         self.bonus_action_available = True
         self.dodging = self.enemy_sapped = False
         self.round_number = 0
-        return [f"The portal carries you deeper, to floor {self.floor}.", *self.describe_room()]
+        return [f"The portal carries you deeper, to floor {self.floor}.",
+                self.dungeon.lore.arrival, "", *self.describe_room()]
 
     def use_ember(self) -> list[str]:
         enemy = self.enemy
@@ -584,7 +586,10 @@ class Game:
                             loot=asdict(room.loot) if room.loot and not room.looted else None)
             rooms.append(data)
         return {"floor": self.floor, "total_floors": self.total_floors,
-                "theme": self.dungeon.theme.name, "scene": "shop" if self.in_shop else "dungeon",
+                "theme": self.dungeon.theme.name,
+                "story": {"arrival": self.dungeon.lore.arrival,
+                          "revelation": self.dungeon.lore.revelation if self.floor_cleared else None},
+                "scene": "shop" if self.in_shop else "dungeon",
                 "position": list(self.position), "player": asdict(self.player),
                 "armor_class": self.player.armor_class, "attack_bonus": self.player.attack_bonus,
                 "rooms": rooms, "portal_open": self.floor_cleared,

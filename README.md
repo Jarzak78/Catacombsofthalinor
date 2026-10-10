@@ -234,3 +234,10 @@ window renderer, animations, and controller bindings are future work.
 The test suite includes real five-floor combat, shopping, and a full
 campaign through the terminal launcher. The executable smoke check now
 plays all five floors from outside the checkout.
+
+Each floor has its own entrance, guardian chamber, and ten exploration
+rooms. Arrival text and guardian discoveries tell a connected story:
+the upper seals lead to a binding grove, its sustaining forge, a royal
+prison, and finally the truth beneath Thalinor's throne. Room lore lives
+in `floor_lore.py`; graphical interfaces can read the current chapter
+from the snapshot's `story` field.

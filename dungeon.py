@@ -1,12 +1,13 @@
 """Generate and reveal a connected, seedable dungeon."""
 
 from campaign import FLOORS
+from floor_lore import LORE
 from collections import deque
 import random
 
 from loot_library import Loot, TREASURE_BUNDLES
 from room import Room
-from room_library import ENTRANCE, ROOM_FLAVORS, SANCTUM, make_enemy, make_warden
+from room_library import make_enemy, make_warden
 
 
 DIRECTION_OFFSETS = {
@@ -34,15 +35,13 @@ class Dungeon:
             raise ValueError("Invalid dungeon floor.")
         self.floor = floor
         self.theme = FLOORS[floor - 1]
+        self.lore = LORE[floor - 1]
         self.rooms: dict[tuple[int, int], Room] = {}
         self._create_rooms(rng)
         self._connect_rooms(rng)
         self._place_contents(rng)
         depth = floor - 1
         for room in self.rooms.values():
-            if depth:
-                room.name = f"{self.theme.name}: {room.name}"
-                room.description = f"Deep beneath Thalinor, floor {floor}. " + room.description
             if room.enemy:
                 enemy = room.enemy
                 enemy.max_hp += depth * (10 if enemy.boss else 5)
@@ -56,15 +55,15 @@ class Dungeon:
                     enemy.name = self.theme.guardian
 
     def _create_rooms(self, rng: random.Random) -> None:
-        flavors = list(ROOM_FLAVORS)
+        flavors = list(self.lore.rooms)
         rng.shuffle(flavors)
         for y in range(self.height):
             for x in range(self.width):
                 position = (x, y)
                 if position == self.start:
-                    name, description = ENTRANCE
+                    name, description = self.lore.entrance
                 elif position == self.boss_position:
-                    name, description = SANCTUM
+                    name, description = self.lore.sanctum
                 else:
                     name, description = flavors.pop()
                 self.rooms[position] = Room(position, name, description, {})
