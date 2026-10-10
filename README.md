@@ -302,3 +302,12 @@ exposes full text only for collected notes in `journal`; visited room
 notes expose their title/id and collection flag, and unexplored rooms
 reveal no documents. Future graphical journal panels can use the same
 `Action("read", "1")` input as the terminal command.
+
+## Terminal title screen
+
+Launch the game to see an ASCII catacomb entrance with the game's title
+and descending stairs. In an interactive terminal, press Enter at the
+start prompt to begin. Narrow terminals use a compact version. The art
+uses plain ASCII so it displays without special fonts or terminal colors.
+Redirected-input playthroughs start automatically without an extra Enter.
+The artwork lives in `title_screen.py`, separate from the game rules.

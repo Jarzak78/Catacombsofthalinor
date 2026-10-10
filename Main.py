@@ -1,10 +1,12 @@
 """Launch Catacombs of Thalinor with ``python3 Main.py``."""
 
 import argparse
+import shutil
 import sys
 import traceback
 
 from game import Game
+from title_screen import title_screen
 
 
 def main() -> None:
@@ -15,8 +17,12 @@ def main() -> None:
     args = parser.parse_args()
     name = args.name.strip() or "Adventurer"
     game = Game(name=name, seed=args.seed, floors=args.floors)
-    print("\n".join(game.introduction()))
+    print("\n".join(title_screen(shutil.get_terminal_size(fallback=(80, 25)).columns)))
     try:
+        if sys.stdin is not None and sys.stdin.isatty():
+            input("\nPress Enter to enter the catacombs...")
+        # The title art supplies the heading; the engine supplies the story.
+        print("\n".join(game.introduction()[1:]))
         while not game.over:
             command = input("\n> ")
             print("\n".join(game.handle_command(command)))
