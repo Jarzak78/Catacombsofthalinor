@@ -39,21 +39,26 @@ jobs:
       - name: Run the game tests
         run: python -m unittest discover -v
 
-      - name: Build the standalone console executable
+      - name: Build the desktop and terminal executables
         run: python scripts/build_windows.py
 
       - name: Verify personal signing with temporary test certificates
         timeout-minutes: 3
         shell: powershell
-        run: .\scripts\test_personal_signing.ps1 -ExecutablePath .\dist\CatacombsOfThalinor.exe
+        run: .\scripts\test_personal_signing.ps1 -ExecutablePath .\dist\CatacombsOfThalinor-Terminal.exe
 
       - name: Play a complete adventure through the executable
-        run: python scripts/smoke_executable.py dist/CatacombsOfThalinor.exe
+        run: python scripts/smoke_executable.py dist/CatacombsOfThalinor-Terminal.exe
+
+      - name: Exercise the desktop screens and controls through the executable
+        run: python scripts/smoke_gui.py dist/CatacombsOfThalinor.exe
 
       - name: Upload the Windows download
         uses: actions/upload-artifact@v4
         with:
           name: CatacombsOfThalinor-Windows-x64
-          path: dist/CatacombsOfThalinor.exe
+          path: |
+            dist/CatacombsOfThalinor.exe
+            dist/CatacombsOfThalinor-Terminal.exe
           if-no-files-found: error
           retention-days: 30

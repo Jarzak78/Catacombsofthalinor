@@ -5,8 +5,9 @@ enter your first dungeon: the forgotten catacombs beneath Thalinor.
 Explore five increasingly dangerous floors, defeat their guardians, and
 use portals to shop for upgrades before facing the Hollow King.
 
-A turn-based terminal dungeon crawler with **Warrior, Rogue, and Wizard**
-adventurers, rolled starting abilities, and combat inspired by the revised
+A turn-based dungeon crawler with desktop and terminal interfaces,
+**Warrior, Rogue, and Wizard** adventurers, rolled starting abilities,
+and combat inspired by the revised
 2024 D&D 5e rules. Classes use the simplified abilities described below;
 the story, monsters, treasure, and dungeon rulings are original.
 
@@ -20,10 +21,23 @@ the story, monsters, treasure, and dungeon rulings are original.
    GitHub requires you to sign in to download workflow artifacts.
 4. Extract the ZIP and double-click **CatacombsOfThalinor.exe**.
 
-The game opens in its own console window. Python is bundled, so you do not
-need to install Python or VS Code: you only need the executable. After quitting, winning,
-or dying, press Enter to close the window. Artifact downloads remain
-available for 30 days; a new successful build refreshes the download.
+The main executable opens a desktop window. Its title screen depicts the
+catacomb entrance and has a **Character Creation** button. Choose a class,
+roll your abilities, and accept your character before clicking **Enter the
+Dungeon**. The adventure screen keeps a scrolling text terminal on the
+left, with a minimap in the upper-right corner and your character's status
+across the top. Type commands and press Enter or click **Send**, or use the
+direction and common-action buttons. Your class button offers **Second
+Wind**, **Hide**, or a **Spells** menu. Use the command box for resting,
+portals, shopping, and other commands listed below; the Up and Down keys
+recall earlier commands. When the adventure ends, its text remains visible
+and **New Adventure** lets you start another character.
+
+Python and Tk are bundled, so you do not need to install Python or VS Code.
+The same ZIP also includes **CatacombsOfThalinor-Terminal.exe** for the
+original console interface. That version waits for Enter before closing
+after quitting, winning, or dying. Artifact downloads remain available for
+30 days; a new successful build refreshes the download.
 
 You can also launch it from a Windows terminal with options:
 
@@ -31,30 +45,41 @@ You can also launch it from a Windows terminal with options:
 .\CatacombsOfThalinor.exe --name Tarin --seed 7
 ```
 
+For the console interface, run `CatacombsOfThalinor-Terminal.exe` instead.
+
 ### Run the Python source
 
-The source requires **Python 3.10 or newer**. All runtime dependencies are in the standard
-library; no package installation, account, network connection, or server
-is needed.
+The source requires **Python 3.10 or newer**. All runtime dependencies are
+in the standard library; no account, network connection, or server is needed.
 
 ```sh
 cd /workspace/Catacombsofthalinor
-python3 Main.py --name Tarin
+python3 GuiMain.py --name Tarin
 ```
 
-At the beginning, choose **Warrior** (the existing Fighter), **Rogue**, or
+The desktop interface requires Tk support in your Python installation.
+Windows Python includes it; some Linux distributions provide it separately
+as `python3-tk`. To play in a terminal instead, run
+`python3 Main.py --name Tarin`.
+
+During character creation, choose **Warrior** (the existing Fighter), **Rogue**, or
 **Wizard**. Each ability—Strength, Dexterity, Intelligence, Constitution,
 Wisdom, and Charisma—is rolled separately using **4d6, dropping one lowest
 die**. The game shows all four dice, the discarded die, and the resulting
 score. Accept the first set or use your **one reroll** to replace all six
-scores. After rerolling, accept the replacement set or quit; a further
-reroll attempt leaves those scores unchanged and rolls no dice.
+scores. After rerolling, accept the replacement set or quit; you cannot
+reroll again. In the desktop interface, **Create Character** accepts the
+displayed scores and shows the resulting character before **Enter the
+Dungeon** starts the adventure.
+Changing class or using **Back to Title** preserves your rolls and whether
+you have used the reroll. Accepting the character locks those choices.
 Scores are assigned to their displayed abilities; there are no added
 species/background bonuses or score rearrangement.
 
-`--class rogue` or `--class wizard` skips the class-selection question,
-then still offers ability rolls and one optional reroll. `--quick-start` skips character
-creation and uses a preset character; it can be combined with `--class`.
+The terminal interface accepts `--class rogue` or `--class wizard` to skip
+the class-selection question, then still offers ability rolls and one
+optional reroll. The terminal's `--quick-start` skips character creation and
+uses a preset character; it can be combined with `--class`.
 For example, `python3 Main.py --quick-start --class wizard --seed 7` begins
 a repeatable Wizard adventure immediately. The default quick-start class
 is Warrior.
@@ -280,8 +305,8 @@ The README describes the implemented mechanics in original wording.
 ## Develop and test
 
 Use the existing checkout; each cloud task already has its own isolated
-workspace. Start the game with `python3 Main.py`; no background services
-need restarting.
+workspace. Start the desktop game with `python3 GuiMain.py`, or the terminal
+game with `python3 Main.py`; no background services need restarting.
 
 ```sh
 python3 -m unittest discover -v
@@ -289,10 +314,14 @@ python3 -m unittest discover -v
 
 The suite checks character creation, class abilities, attack and damage rolls,
 action budgets, healing, resources, death saves, generation, treasure, complete seeded
-adventures, and a full adventure through the actual command-line entry point.
+adventures, desktop-session flow and minimap visibility, and a full adventure
+through the actual command-line entry point.
 
-`Main.py` owns terminal input; `game.py` handles commands and turns;
-`combat.py` resolves dice; `player.py` tracks character resources;
+`GuiMain.py` launches the desktop interface; `desktop_ui.py` builds its
+Tk screens, and `ui_controller.py` manages character creation and commands.
+`Main.py` owns terminal input;
+`game.py` handles commands and turns; `combat.py` resolves dice;
+`player.py` tracks character resources;
 `character_creation.py` rolls and accepts starting abilities;
 `dungeon.py` generates the map; the room and loot libraries define content.
 Pass an explicit seed to reproduce gameplay failures.
@@ -304,12 +333,13 @@ For free signing on your own Windows account, see
 short-lived certificate and signs a separate EXE copy. It does not clear Chrome
 download detections or change antivirus, browser, or PowerShell policies.
 
-GitHub builds a **64-bit Windows console executable** whenever Python source
+GitHub builds **64-bit Windows desktop and console executables** whenever Python source
 or build configuration is pushed to `main`, `codex/first-playable-dungeon`, or `codex/dungeon-campaign`.
 Once this workflow is on the repository's default branch, GitHub also
 allows **Run workflow** on the Actions page, selecting the game branch.
-Each build runs the test suite and then plays a complete adventure
-through the actual executable from outside the checkout before uploading it.
+Each build runs the test suite, checks the packaged desktop's screens,
+character creation, commands, and minimap, and plays a complete adventure
+through the terminal executable from outside the checkout before uploading them.
 
 To build on your own Windows computer, install **64-bit Python 3.12**, open
 a terminal in the source folder, and run:
@@ -317,12 +347,15 @@ a terminal in the source folder, and run:
 ```powershell
 python -m pip install -r requirements-build.txt
 python scripts/build_windows.py
-python scripts/smoke_executable.py dist/CatacombsOfThalinor.exe
+python scripts/smoke_gui.py dist/CatacombsOfThalinor.exe
+python scripts/smoke_executable.py dist/CatacombsOfThalinor-Terminal.exe
 ```
 
-The output is `dist/CatacombsOfThalinor.exe`. It bundles Python and the game
-in one file and opens a console when launched from File Explorer. Game
-data is embedded in the code, so it works from any folder. PyInstaller
+The outputs are `dist/CatacombsOfThalinor.exe` for the desktop interface
+and `dist/CatacombsOfThalinor-Terminal.exe` for the console interface. Each
+bundles Python and the game in one file. The desktop build also bundles Tk
+and opens without a console. Game data and the title artwork are embedded,
+so both executables work from any folder. PyInstaller
 must build on Windows to produce a Windows EXE; a Linux build cannot be
 renamed to make a Windows application.
 
@@ -371,11 +404,12 @@ At Mira's sanctuary, use `sell <item id>` to sell all copies of that valuable
 or `sell all` to exchange your collected valuables for gold, then buy upgrades. Supplies
 and equipped gear are separate from the valuables you sell.
 
-## Future graphics and controls
+## Interfaces, graphics, and controls
 
-`Main.py` is the terminal adapter. It owns input and printing; the engine
-never opens a window, reads keys, or prints. A graphical or controller
-adapter can use the same engine directly:
+The desktop interface launches through `GuiMain.py`; `Main.py` remains the
+terminal adapter. Both interfaces use the same game engine. The engine
+never opens a window, reads keys, or prints, so richer graphics or controller
+input can use its existing actions and snapshots:
 
 ```python
 from actions import Action
@@ -395,20 +429,25 @@ visited room descriptions/exits/enemies/loot, portal status, and vendor
 stock with stable item ids. Unvisited room contents are hidden. Reading a
 snapshot does not advance randomness or time; changing it cannot mutate
 the game. Coordinates identify rooms within the current floor. Text
-commands use the same `perform` path as future button or controller input.
+commands and buttons use the same `perform` path as future controller input.
 Floor themes and item definitions live separately in `campaign.py`.
-Future foe panels can use `Action("examine")` through the same engine.
+Foe panels can use `Action("examine")` through the same engine.
 Class controls use `Action("hide")`, `Action("cast", "firebolt")`, or
-`Action("sell", "all")`. The terminal character creator uses pure rolled-score
-data from `character_creation.py`; another interface can display those rolls
+`Action("sell", "all")`. Both character creators use pure rolled-score
+data from `character_creation.py` to display rolls
 and pass an accepted `Player` to `Game(player=player, seed=7)`. Constructing
 `Game` directly without a player or rolled stats uses class presets.
 
-This prepares the engine for graphics and controls; graphics assets, a
-window renderer, animations, and controller bindings are future work.
+The desktop interface supplies an illustrated entrance, character-creation
+screens, text gameplay, action buttons, and a minimap. Visited rooms show
+known foes, treasure, or notes; unexplored rooms use question marks, and
+only explored passages are drawn. Hidden room descriptions, enemies, and
+treasure remain hidden. In Mira's shop the map shows the
+sanctuary instead of dungeon rooms. Sprite-based gameplay, animations, and
+controller bindings can be added later without replacing combat rules.
 The test suite includes real five-floor combat, shopping, and a full
-campaign through the terminal launcher. The executable smoke check now
-plays all five floors from outside the checkout.
+campaign through the terminal launcher. The terminal executable smoke
+check plays all five floors from outside the checkout.
 
 Each floor has its own entrance, guardian chamber, and ten exploration
 rooms. Arrival text and guardian discoveries tell a connected story:
@@ -476,7 +515,7 @@ reveal no documents. Future graphical journal panels can use the same
 
 ## Terminal title screen
 
-Launch the game to see an ASCII catacomb entrance with the game's title
+Launch the terminal version to see an ASCII catacomb entrance with the game's title
 and descending stairs, followed by class selection and ability rolls.
 `--quick-start` goes directly from the title to the adventure. Narrow
 terminals use a compact version. The art uses plain ASCII so it displays

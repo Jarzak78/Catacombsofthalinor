@@ -1,4 +1,4 @@
-"""Package the game as a standalone Windows console executable.
+"""Package the desktop game and its terminal alternative for Windows.
 
 Run this script using 64-bit Python 3.12 on Windows after installing
 requirements-build.txt. PyInstaller does not cross-compile from Linux or
@@ -17,7 +17,7 @@ PYINSTALLER_VERSION = "6.16.0"
 
 
 def main() -> int:
-    """Validate the build environment and create the Windows executable."""
+    """Validate the build environment and create both Windows executables."""
     if sys.platform != "win32":
         print(
             "Build this Windows executable on Windows. PyInstaller cannot "
@@ -53,42 +53,46 @@ def main() -> int:
 
     build_directory = ROOT / "build"
     build_directory.mkdir(parents=True, exist_ok=True)
-    try:
-        subprocess.run(
-            [
-                sys.executable,
-                "-m",
-                "PyInstaller",
-                "--noconfirm",
-                "--clean",
-                "--onefile",
-                "--console",
-                "--name",
-                "CatacombsOfThalinor",
-                "--distpath",
-                str(ROOT / "dist"),
-                "--workpath",
-                str(build_directory),
-                "--specpath",
-                str(build_directory),
-                str(ROOT / "Main.py"),
-            ],
-            cwd=ROOT,
-            check=True,
-        )
-    except subprocess.CalledProcessError as error:
-        print(
-            f"PyInstaller failed with exit code {error.returncode}.",
-            file=sys.stderr,
-        )
-        return error.returncode or 1
+    targets = (
+        ("CatacombsOfThalinor", "GuiMain.py", "--windowed"),
+        ("CatacombsOfThalinor-Terminal", "Main.py", "--console"),
+    )
+    for name, entry_point, window_mode in targets:
+        try:
+            subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "PyInstaller",
+                    "--noconfirm",
+                    "--clean",
+                    "--onefile",
+                    window_mode,
+                    "--name",
+                    name,
+                    "--distpath",
+                    str(ROOT / "dist"),
+                    "--workpath",
+                    str(build_directory),
+                    "--specpath",
+                    str(build_directory),
+                    str(ROOT / entry_point),
+                ],
+                cwd=ROOT,
+                check=True,
+            )
+        except subprocess.CalledProcessError as error:
+            print(
+                f"PyInstaller failed while building {name} with exit code {error.returncode}.",
+                file=sys.stderr,
+            )
+            return error.returncode or 1
 
-    executable = ROOT / "dist" / "CatacombsOfThalinor.exe"
-    if not executable.is_file():
-        print(f"Build did not produce the expected executable: {executable}", file=sys.stderr)
-        return 1
-
-    print(f"Windows executable ready: {executable}")
+        executable = ROOT / "dist" / f"{name}.exe"
+        if not executable.is_file():
+            print(f"Build did not produce the expected executable: {executable}", file=sys.stderr)
+            return 1
+        print(f"Windows executable ready: {executable}")
     return 0
 
 
