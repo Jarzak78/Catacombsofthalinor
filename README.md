@@ -1,13 +1,14 @@
 # Catacombs of Thalinor
 
-Your guild badge is new. Your sword has never faced a monster. Today you
+Your guild badge is new. You have never faced a monster. Today you
 enter your first dungeon: the forgotten catacombs beneath Thalinor.
 Explore five increasingly dangerous floors, defeat their guardians, and
 use portals to shop for upgrades before facing the Hollow King.
 
-A turn-based terminal dungeon crawler with a prebuilt fighter and combat
-based on **the revised 2024 D&D 5e rules**. The story and monster statistics
-are original; encounters are balanced for one adventurer.
+A turn-based terminal dungeon crawler with **Warrior, Rogue, and Wizard**
+adventurers, rolled starting abilities, and combat inspired by the revised
+2024 D&D 5e rules. Classes use the simplified abilities described below;
+the story, monsters, treasure, and dungeon rulings are original.
 
 ## Play
 
@@ -41,13 +42,34 @@ cd /workspace/Catacombsofthalinor
 python3 Main.py --name Tarin
 ```
 
-Use `--seed 7` to repeat a dungeon and its random events. Identical commands
-with the same seed give identical results. The default campaign has five floors. Use `--floors 1` for a short first-floor
+At the beginning, choose **Warrior** (the existing Fighter), **Rogue**, or
+**Wizard**. Each ability—Strength, Dexterity, Intelligence, Constitution,
+Wisdom, and Charisma—is rolled separately using **4d6, dropping one lowest
+die**. The game shows all four dice, the discarded die, and the resulting
+score. Accept the first set or use your **one reroll** to replace all six
+scores. After rerolling, accept the replacement set or quit; a further
+reroll attempt leaves those scores unchanged and rolls no dice.
+Scores are assigned to their displayed abilities; there are no added
+species/background bonuses or score rearrangement.
+
+`--class rogue` or `--class wizard` skips the class-selection question,
+then still offers ability rolls and one optional reroll. `--quick-start` skips character
+creation and uses a preset character; it can be combined with `--class`.
+For example, `python3 Main.py --quick-start --class wizard --seed 7` begins
+a repeatable Wizard adventure immediately. The default quick-start class
+is Warrior.
+
+Use `--seed 7` to repeat character rolls, a dungeon, and its random events.
+The same seed, class, accepted rolls/rerolls, and commands give the same
+results. The default campaign has five floors. Use `--floors 1` for a short first-floor
 trial, or `--floors 3` for a three-floor campaign. Adventures are held in memory;
 quitting ends the current run.
 
-Start with `look`, `map`, and `help`. The entrance is safe, and a nearby
-treasure room always holds a magic longsword. Search with `loot` to claim it.
+Start with `look`, `map`, `skills`, and `help`. The entrance is safe. Search
+treasure rooms with `loot`; gems, jewelry, useful magical supplies, and
+occasional equipment upgrades can join your gold and healing potions.
+A nearby first-floor treasure room always holds a +1 weapon suited to
+your class: longsword, rapier, or magical staff.
 
 Entering a room with a living foe shows only combat information: the enemy,
 initiative, any ambush result, your turn, and combat commands. Room descriptions,
@@ -66,43 +88,49 @@ packs, burial chests, offerings, and other hiding places suited to each room
 and floor. Treasure and documents share one discovery description when found
 together. The following lines list exactly what you collect. Discovery prose
 lives in `loot_flavor.py` and consumes no random rolls.
-Found weapons receive a physical description, their exact name and attack/damage
-bonus, and an explanation of whether they replace your current weapon.
+Found equipment receives an exact name and bonus, and an explanation of
+whether it replaces your current gear. Better compatible gear equips
+automatically; a weaker find never downgrades what you use.
 
 ## Commands
 
 | Command | Effect |
 | --- | --- |
 | `north`, `south`, `east`, `west` | Move through a passage; `n/s/e/w` also work. |
-| `look`, `map`, `stats`, `inventory` | Inspect your surroundings or character. |
+| `look`, `map`, `stats`, `inventory`, `skills` | Inspect surroundings, character, possessions, or class abilities. |
 | `loot` | Collect treasure and lore documents once the room is safe. |
 | `journal` | List your collected notes with journal numbers. |
 | `read`, `read 1`, `read <note id>` | Read the latest note, a numbered note, or a collected note by its id. |
 | `examine`, `inspect`, `examine foe` | Study your current foe's description, HP, AC, attacks, and tactical clues. |
-| `attack` / `a` | Use an action for a longsword attack. |
+| `attack` / `a` | Use an action for a weapon attack; Wizards use Fire Bolt instead. |
+| `strike` | Make one physical weapon strike, including a Wizard's staff; Warriors use `attack` for Extra Attack. |
+| `hide` | Rogue: try to hide, gaining Advantage for a successful hidden attack. |
+| `cast <spell>` | Wizard: cast `firebolt`, `missile`, `armor`, `shield`, `frost`, or `fireball`. |
 | `dodge` / `d` | Use an action to impose Disadvantage on enemy attacks until your next turn. |
-| `disengage` / `flee` / `f` | Use an action and movement to retreat without an opportunity attack. |
+| `disengage` / `flee` / `f` | Use an action and movement to retreat without an opportunity attack; level-2+ Rogues use a bonus action. |
 | `potion` / `p` | Use a bonus action to drink a healing potion for `2d4+2` HP. |
-| `second wind` / `wind` | Use a bonus action to heal `1d10 + fighter level` HP. |
-| `action surge` / `surge` | At fighter level 2, gain one additional action this turn. |
+| `second wind` / `wind` | Warrior: use a bonus action to heal `1d10 + level` HP. |
+| `action surge` / `surge` | Warrior: from level 2, gain one additional action this turn. |
+| `mana` | Wizard: drink a Mana draught as a bonus action to restore one spent level-1 spell slot. |
 | `end` | End your turn and allow the enemy to act. |
 | `rest` | Spend one hour resting; spend available Hit Dice until healed. |
 | `rest 0`, `rest 1`, `rest 2` | Limit the Hit Dice spent in that one-hour rest. |
 | `long rest` | Rest for eight hours at the entrance. |
 | `portal` | After defeating a guardian, enter its portal to the vendor. |
 | `shop`, `buy <item id>` | View vendor prices and purchase an upgrade or supply. |
+| `sell <item id>`, `sell all` | At Mira's shop, sell collected valuables for their displayed gold value. |
 | `descend` | Leave the vendor for the next floor; after the final floor, return home. |
 | `ember` | Consume an Ember stone and an action to deal 3d6 magic damage. |
 | `help`, `quit` | Show instructions or end the adventure. |
 
 Actions do **not** automatically end your turn. For example, you can
-`attack`, drink a `potion` as your bonus action, then `end`. At level 2 you
+`attack`, drink a `potion` as your bonus action, then `end`. A level-2 Warrior
 can `attack`, `surge`, `attack`, and `end`. You get only one bonus action
 per turn, so Second Wind and a potion cannot both be used on that turn.
 Other informational and invalid commands spend no actions. Examining a
 foe follows the opening-encounter rules below.
 
-## Implemented 2024 combat rules
+## Shared combat rules
 
 - Initiative is `d20 + Dexterity modifier`, rolled when an encounter begins.
   The adventurer wins ties as this game's chosen DM ruling.
@@ -113,36 +141,38 @@ foe follows the opening-encounter rules below.
   the encounter. Examining rolls no dice and advances no time; you must
   be conscious and fighting a foe.
 - If the monster wins initiative, it ambushes you. You automatically
-  make this game's **Perception save**: `d20 + Wisdom modifier` against
-  DC 12, currently `d20 + 1` without proficiency. Success lets its opening
+  make this game's **Perception save** against DC 12. Warriors and Wizards
+  use `d20 + Wisdom modifier`; Rogues add twice their proficiency bonus
+  through Perception expertise. Success lets its opening
   strike proceed normally; failure gives that strike Advantage. Later
   attacks get no ambush Advantage, and you do not lose a turn. Natural
   1 and 20 have no special effect on this save. This is a house rule.
-- Attacks roll `d20 + Strength modifier + proficiency + magic weapon bonus`
-  against Armor Class. Natural 1 always misses; natural 20 always hits.
+- Weapon attacks roll `d20 + attack ability modifier + proficiency + magic
+  weapon bonus` against Armor Class. Warriors and Wizard staff attacks use
+  Strength; Rogue rapier attacks use Dexterity. Wizard spell attacks use
+  Intelligence, proficiency, and their magical staff's focus bonus.
+  Natural 1 always misses; natural 20 always hits.
   As a game house rule, a natural 1 also causes 1 HP of self-damage to
   the attacker and a comic mishap description.
 - Advantage and Disadvantage roll two d20s and use the higher or lower;
   having both cancels them.
-- A one-handed longsword deals `1d8 + Strength + 2` with the Dueling style,
-  plus its magic bonus. Critical hits double dice and add modifiers once.
+- Critical hits double damage dice, including eligible Sneak Attack dice,
+  and add flat modifiers once. A critical hit can still roll low damage.
 - Successful player and monster attacks get descriptions based on the damage
   rolled: **glancing** (1–5), **solid** (6–10), **heavy** (11–15), or
   **devastating** (16+). Swords, claws, roots, iron fists, and the Hollow
   King's darkness have distinct wording; critical hits add precision detail.
   These descriptions add no damage, conditions, or extra random rolls.
-- Longsword **Sap** applies Disadvantage to the target's next attack before
-  the fighter's next turn. It does not stack or persist indefinitely.
-- Second Wind starts with two uses. A short rest restores one use; a long
-  rest restores all. Action Surge unlocks at level 2 and recharges on
-  either kind of rest.
-- A fighter's Hit Die is a d10. Short-rest healing adds Constitution to
-  each die; multiple dice can be spent within the same rest. A long rest
+- Short-rest healing adds Constitution to each spent Hit Die; multiple
+  dice can be spent within the same rest. A long rest
   restores all Hit Dice and HP, and must begin with positive HP. At least
   sixteen hours must pass after one long rest before starting the next.
-- XP is cumulative: level 2 at 300 XP, level 3 at 900. Fixed fighter HP
-  increases use `6 + Constitution modifier`; leveling preserves missing
-  HP and does not fully heal or recharge abilities.
+- XP is cumulative: level 2 at 300 XP, level 3 at 900, level 4 at 2,700,
+  and level 5 at 6,500. Fixed HP increases use `6 + Constitution modifier`
+  for Warriors, `5 + Constitution modifier` for Rogues, and
+  `4 + Constitution modifier` for Wizards. Leveling preserves missing HP
+  rather than fully healing or recharging existing resources. Each level
+  adds at least 1 HP, even with a very low Constitution score.
 - At zero HP, you are unconscious. Death saves happen at the start of
   your turn: 10+ succeeds, natural 1 causes two failures, natural 20
   restores 1 HP, three successes stabilize, and three failures kill.
@@ -151,21 +181,90 @@ foe follows the opening-encounter rules below.
   damage can cause instant death. A natural-20 recovery lets you rise
   using half your movement and act on that turn.
 
-The prebuilt fighter has Strength 16, Dexterity 14, Constitution 14,
-Intelligence 10, Wisdom 12, and Charisma 10. He begins with 12 HP, AC 18
-(chain mail and shield), a +5 attack bonus, three potions, and Dueling.
-The early +1 longsword increases both attack and damage by one.
+## Adventurer classes
+
+All three classes support levels 1–5. Starting HP and attack bonuses depend
+on your rolled abilities. `skills` lists your class's abilities, costs, and
+later unlocks without spending a turn. `stats` shows remaining class resources.
+
+### Warrior
+
+The original Fighter is shown as **Warrior** during character creation.
+It starts with chain mail and shield (AC 18), a longsword, the Dueling
+style, and a d10 Hit Die. A sword strike deals `1d8 + Strength modifier + 2`,
+plus its magic bonus. Longsword **Sap** gives the enemy Disadvantage on its
+next attack before the Warrior's next turn; repeated Sap does not stack.
+
+**Second Wind** uses a bonus action to restore `1d10 + level` HP. It starts
+with two uses, gains a third at level 4, restores one use on a short rest,
+and restores all uses on a long rest. **Action Surge** unlocks at level 2,
+adding one action this turn once per short or long rest. At level 5,
+**Extra Attack** grants two weapon strikes per Attack action.
+
+### Rogue
+
+The Rogue starts with a rapier, leather armor (AC `12 + Dexterity modifier`),
+and a d8 Hit Die. Rapier strikes use Dexterity for both attack and damage.
+**Stealth and Perception expertise** add twice proficiency to their checks.
+The rapier's **Vex** grants Advantage on your next strike against that foe
+after a successful hit.
+
+Use **hide** to roll a Stealth check against `DC 12 + dungeon floor`. Success
+gives Advantage on your next attack and Disadvantage to enemy attacks until
+you reveal yourself by attacking. Hiding costs an action at level 1;
+**Cunning Action** makes it a bonus action from level 2, and also lets you
+flee using a bonus action instead of an action. Hidden status ends when you
+attack. **Sneak Attack** adds `ceil(level / 2)d6` once per turn when an
+eligible rapier strike has Advantage; these dice double on a critical hit.
+At level 5, **Uncanny Dodge** automatically halves damage from one enemy hit
+per turn while you are conscious. The game applies it without a separate
+reaction command.
+
+### Wizard
+
+The Wizard starts with a staff, known spells, AC `10 + Dexterity modifier`,
+and a d6 Hit Die. `attack` and `cast firebolt` use **Fire Bolt**, a slot-free
+Intelligence spell attack dealing `1d10` damage (`2d10` at level 5). Use
+`strike` for a physical staff attack based on Strength.
+
+| Spell | Cost and effect |
+| --- | --- |
+| `cast missile` | Action and a level-1 slot: Magic Missile automatically deals `3d4+3` damage. |
+| `cast armor` | Action in combat and a level-1 slot: Mage Armor changes base AC to `13 + Dexterity modifier` until a long rest. |
+| `cast shield` | Bonus action and a level-1 slot: +5 AC against the next enemy strike. |
+| `cast frost` | Action and a level-2 slot: an Intelligence spell attack deals `3d8`; a hit also gives the enemy Disadvantage on its next attack. |
+| `cast fireball` | Action and a level-3 slot: deals `8d6`, halved by a successful enemy Dexterity save. |
+
+Spell save DC is `8 + Intelligence modifier + proficiency + staff focus bonus`.
+This is a single-enemy dungeon; Fireball targets the current foe. Shield's bonus-action
+cost and Frost are simplified game abilities, rather than full tabletop
+spell implementations.
+
+| Wizard level | Level-1 slots | Level-2 slots | Level-3 slots |
+| --- | --- | --- | --- |
+| 1 | 2 | 0 | 0 |
+| 2 | 3 | 0 | 0 |
+| 3 | 4 | 2 | 0 |
+| 4 | 4 | 3 | 0 |
+| 5 | 4 | 3 | 2 |
+
+Long rests and the portal's sanctuary rest restore all spell slots and end
+Mage Armor. **Arcane Recovery** works automatically on one short rest per
+long rest: it recovers spent slots with a combined slot-level budget of
+`ceil(level / 2)`, restoring lower-level slots first, up to level 2. A
+**Mana draught** restores one spent level-1 slot when drunk with `mana`;
+it uses your bonus action in combat.
 
 ## Scope and dungeon rulings
 
-This campaign implements a selected set of melee rules for a **level 1–5 fighter**,
-including two strikes per Attack action at level 5. Ember stones are an original
-magic item using the game's own rules.
-It does not yet implement character creation, species/background traits,
-origin feats, other classes, spells, ability checks, Tactical Mind,
-grappling, ranged weapons, multiple simultaneous opponents, subclasses, feats, or later
-fighter features other than Extra Attack. The complete campaign can reach fighter level 5. Higher-level progression
-statistics exist in the model, but higher-level class features are outside scope.
+This campaign implements selected level 1–5 Warrior, Rogue, and Wizard
+abilities, rolled character creation, Stealth/Perception checks, and the
+spells listed above. Ember stones and Mana draughts use the game's own rules.
+It does not implement the full tabletop classes, species/background traits,
+origin feats, Tactical Mind, grappling, tactical ranged combat, multiple
+simultaneous opponents, subclasses, feats, or features beyond those listed.
+Higher-level progression statistics exist in the model; higher-level class
+features are outside the campaign's scope.
 
 Combatants fight within five feet; exits are close enough for normal
 movement, including after standing. Leaving combat uses Disengage;
@@ -188,12 +287,13 @@ need restarting.
 python3 -m unittest discover -v
 ```
 
-The suite checks attack and damage rolls, action budgets, healing,
-fighter resources, death saves, generation, treasure, complete seeded
+The suite checks character creation, class abilities, attack and damage rolls,
+action budgets, healing, resources, death saves, generation, treasure, complete seeded
 adventures, and a full adventure through the actual command-line entry point.
 
 `Main.py` owns terminal input; `game.py` handles commands and turns;
 `combat.py` resolves dice; `player.py` tracks character resources;
+`character_creation.py` rolls and accepts starting abilities;
 `dungeon.py` generates the map; the room and loot libraries define content.
 Pass an explicit seed to reproduce gameplay failures.
 
@@ -236,21 +336,40 @@ and XP increase with depth; the guardians culminate in the Hollow King.
 
 Defeating a guardian clears its floor rather than ending the game. Stand in
 its chamber and type `portal` to teleport to Mira's sanctuary. A safe night's
-rest restores HP, Hit Dice, Second Wind, and Action Surge once per visit.
-Potions and Ember stones are not replenished for free.
+rest restores HP, Hit Dice, class resources, and Wizard spell slots once per
+visit, and ends Mage Armor. Potions, Ember stones, and Mana draughts are
+not replenished for free.
 
-Use `shop` to see prices and `buy sword`, `buy armor`, `buy charm`,
+Use `shop` to see stable purchase ids and `buy sword`, `buy armor`, `buy charm`,
 `buy ward`, `buy potion`, or `buy ember` to purchase. Equipment is applied
 immediately. The sword and armor tier improves at deeper vendors. The
 Vitality charm grants +4 maximum and current HP; the Warding ring grants
 +1 AC. Both are permanent and can only be bought once. Healing potions
 use a bonus action, and Ember stones use an action for automatic 3d6 damage.
+Wizards can also use `buy mana` for a Mana draught (18 gold).
 Insufficient gold, duplicate permanent items, and downgrades never cost gold.
 
 When done shopping, type `descend`. Your character, XP, gold, supplies, and
 equipment carry forward. Old floors close behind you. After the last floor,
 the vendor's departure portal returns you home and completes the campaign.
 Victory is not declared until you choose to leave the final vendor.
+
+## Treasure and valuables
+
+The dungeon contains gems, jewelry, and magical trinkets alongside coins and
+healing potions. Safe caches and defeated foes can hold treasure. Some magical
+finds are usable supplies: **Ember stones** deal `3d6` damage with `ember`,
+and **Mana draughts** restore a Wizard's spent level-1 slot with `mana`.
+Other classes can carry Mana draughts to sell to Mira instead.
+Rare finds include class-compatible magical weapons and armor; better gear
+equips automatically and weaker gear never replaces your current equipment.
+
+`look` gives vague hints about the container and its contents. Use `loot`
+after a room is safe to reveal exact item names, quantities, bonuses, and
+sell values. `inventory` lists collected valuables and their stable item ids.
+At Mira's sanctuary, use `sell <item id>` to sell all copies of that valuable
+or `sell all` to exchange your collected valuables for gold, then buy upgrades. Supplies
+and equipped gear are separate from the valuables you sell.
 
 ## Future graphics and controls
 
@@ -269,7 +388,8 @@ messages = game.perform(Action("east"))
 state = game.get_state()       # Redraw from the updated state
 ```
 
-Snapshots expose floor/scene, player equipment/resources, turn budgets,
+Snapshots expose floor/scene, class, abilities, player equipment/resources,
+spell slots, carried valuables, turn budgets,
 encounter initiative and examination availability,
 visited room descriptions/exits/enemies/loot, portal status, and vendor
 stock with stable item ids. Unvisited room contents are hidden. Reading a
@@ -278,6 +398,11 @@ the game. Coordinates identify rooms within the current floor. Text
 commands use the same `perform` path as future button or controller input.
 Floor themes and item definitions live separately in `campaign.py`.
 Future foe panels can use `Action("examine")` through the same engine.
+Class controls use `Action("hide")`, `Action("cast", "firebolt")`, or
+`Action("sell", "all")`. The terminal character creator uses pure rolled-score
+data from `character_creation.py`; another interface can display those rolls
+and pass an accepted `Player` to `Game(player=player, seed=7)`. Constructing
+`Game` directly without a player or rolled stats uses class presets.
 
 This prepares the engine for graphics and controls; graphics assets, a
 window renderer, animations, and controller bindings are future work.
@@ -352,8 +477,9 @@ reveal no documents. Future graphical journal panels can use the same
 ## Terminal title screen
 
 Launch the game to see an ASCII catacomb entrance with the game's title
-and descending stairs. In an interactive terminal, press Enter at the
-start prompt to begin. Narrow terminals use a compact version. The art
-uses plain ASCII so it displays without special fonts or terminal colors.
-Redirected-input playthroughs start automatically without an extra Enter.
+and descending stairs, followed by class selection and ability rolls.
+`--quick-start` goes directly from the title to the adventure. Narrow
+terminals use a compact version. The art uses plain ASCII so it displays
+without special fonts or terminal colors. Redirected-input playthroughs
+can use `--quick-start` to skip creation prompts.
 The artwork lives in `title_screen.py`, separate from the game rules.

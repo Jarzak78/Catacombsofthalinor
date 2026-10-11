@@ -82,14 +82,37 @@ _UNKNOWN_PROFILE = (
 )
 
 
-def foe_details(enemy: Enemy) -> dict:
+_CLASS_TACTICS = {
+    "rogue": (
+        "A successful Hide check gives your next rapier attack Advantage. "
+        "A rapier hit applies Vex to your next attack against this foe. "
+        "Advantage allows Sneak Attack once per turn; a critical hit "
+        "doubles its extra damage dice."
+    ),
+    "wizard": (
+        "Prepare Mage Armor in a safe room. Shield costs a level-1 slot "
+        "and a bonus action for +5 AC against the next enemy strike. "
+        "When available, a Frost Lance hit gives its next attack "
+        "Disadvantage; Magic Missile spends a level-1 slot to bypass "
+        "the attack roll."
+    ),
+}
+
+
+def foe_details(enemy: Enemy, class_id: str = "fighter") -> dict:
     """Return authored flavor and the foe's current, possibly scaled stats.
 
     Every call creates a new JSON-compatible view. Reading these details
     neither changes the enemy nor consumes random numbers. The descriptions
     do not grant resistances, vulnerabilities, conditions, or extra attacks.
+    Tactical advice uses the adventurer's supported abilities; the default
+    preserves the original warrior advice for existing callers.
     """
+    if class_id not in ("fighter", "rogue", "wizard"):
+        raise ValueError("Choose fighter, rogue, or wizard for foe advice.")
     description, tactics = _PROFILES.get(enemy.name, _UNKNOWN_PROFILE)
+    if class_id in _CLASS_TACTICS:
+        tactics = _CLASS_TACTICS[class_id]
     return {
         "name": enemy.name,
         "description": description,

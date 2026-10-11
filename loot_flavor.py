@@ -359,7 +359,15 @@ def loot_clue_description(room: Room) -> str:
             clues.append("the glint of stoppered glass")
         if loot.weapon_name:
             clues.append("a gleaming longsword" if "longsword" in loot.weapon_name.lower()
+                         else "a slender blade" if "rapier" in loot.weapon_name.lower()
+                         else "a rune-carved staff" if "staff" in loot.weapon_name.lower()
                          else "the outline of an old weapon")
+        if loot.armor_name:
+            clues.append("folds of old protective gear")
+        if any(item.kind == "valuable" for item in loot.items):
+            clues.append("a glint of cut stone or jewelry")
+        if any(item.kind in ("ember", "mana") for item in loot.items):
+            clues.append("a faint magical shimmer")
     if not clues:
         return "Something here may be worth a closer search. Type 'loot' to investigate."
     if len(clues) == 1:
@@ -373,10 +381,13 @@ def loot_clue_description(room: Room) -> str:
 
 def weapon_discovery_description(name: str, bonus: int) -> str:
     """Identify a searched weapon and describe its actual mechanical bonus."""
-    if "sword" in name.lower():
+    if "sword" in name.lower() or "rapier" in name.lower():
         detail = "Its steel blade remains keen above a weathered leather grip."
+    elif "staff" in name.lower():
+        detail = "Silver inlay follows the grain of a polished wooden shaft."
     else:
         detail = "Dust falls from an old weapon scarred by forgotten battles."
     if bonus:
         detail += " Fine runes glow faintly as you turn it in the lantern light."
-    return f"You uncover {name}. {detail} Weapon bonus: +{bonus} to attack and damage."
+    focus = " Its focus also improves spell attacks and save DC." if "staff" in name.lower() else ""
+    return f"You uncover {name}. {detail} Weapon bonus: +{bonus} to attack and damage.{focus}"

@@ -8,6 +8,7 @@ import subprocess
 import sys
 from tempfile import TemporaryDirectory
 import unittest
+from unittest.mock import patch
 
 from actions import Action
 from dungeon import Dungeon
@@ -70,12 +71,13 @@ class NotePlacementTests(unittest.TestCase):
         self.assertEqual(len(ids), 20)
 
     def test_note_placement_preserves_existing_dungeon_random_sequence(self):
-        # Captured from the existing seed-7 generator before adding story notes.
+        # Authored note placement must not consume dice, even as loot evolves.
         for floor in range(1, 6):
-            rng = random.Random(7)
-            Dungeon(rng, floor=floor)
-            self.assertEqual([rng.randrange(1_000_000) for _ in range(3)],
-                             [669949, 196997, 390487])
+            with_notes, without_notes = random.Random(7), random.Random(7)
+            Dungeon(with_notes, floor=floor)
+            with patch('dungeon.NOTES', {depth: () for depth in range(1, 6)}):
+                Dungeon(without_notes, floor=floor)
+            self.assertEqual(with_notes.getstate(), without_notes.getstate())
 
     def test_map_note_marker_preserves_unknown_enemy_and_treasure_priority(self):
         game = Game(seed=7)
@@ -334,7 +336,7 @@ class JournalCampaignTests(unittest.TestCase):
                 script.extend(('journal', 'read'))
         with TemporaryDirectory() as directory:
             result = subprocess.run([sys.executable, '-B', str(ROOT / 'Main.py'),
-                                     '--name', 'Tarin', '--seed', '7'],
+                                     '--quick-start', '--name', 'Tarin', '--seed', '7'],
                                     cwd=directory, input='\n'.join(script) + '\n',
                                     text=True, capture_output=True, timeout=10)
         self.assertEqual(result.returncode, 0, result.stderr)

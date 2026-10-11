@@ -196,7 +196,7 @@ class CampaignTests(unittest.TestCase):
         self.assertTrue(game.won)
         launcher = Path(__file__).resolve().parents[1] / 'Main.py'
         with TemporaryDirectory() as directory:
-            result = subprocess.run([sys.executable, str(launcher), '--name', 'Tarin', '--seed', '7'],
+            result = subprocess.run([sys.executable, str(launcher), '--quick-start', '--name', 'Tarin', '--seed', '7'],
                                     cwd=directory, input='\n'.join(commands)+'\n', text=True,
                                     capture_output=True, timeout=10)
         self.assertEqual(result.returncode, 0, result.stderr)

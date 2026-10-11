@@ -96,7 +96,8 @@ def complete_adventure(seed, floors=1):
                    if position != game.dungeon.boss_position]
         # First floor has the guaranteed weapon; later floors have supplies.
         weapon_room = next((position for position, room in game.dungeon.rooms.items()
-                            if room.loot and room.loot.weapon_name), None)
+                            if position in targets and room.loot and room.loot.weapon_name
+                            and room.enemy is None), None)
         if weapon_room is not None:
             targets.remove(weapon_room)
             targets.insert(0, weapon_room)
@@ -366,18 +367,18 @@ class ExplorationTests(unittest.TestCase):
         game, commands, _ = complete_adventure(7)
         self.assertTrue(game.won)
         result = subprocess.run(
-            [sys.executable, "-B", "Main.py", "--name", "Tarin", "--seed", "7", "--floors", "1"],
+            [sys.executable, "-B", "Main.py", "--quick-start", "--name", "Tarin", "--seed", "7", "--floors", "1"],
             cwd=ROOT, input="\n".join(commands) + "\n", text=True,
             capture_output=True, timeout=10,
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("Your first dungeon is conquered", result.stdout)
-        self.assertIn("Fighter 2", result.stdout)
+        self.assertIn("Warrior (Fighter) 2", result.stdout)
 
     def test_cli_handles_quit_and_closed_input(self):
         for commands in ("help\nstats\nquit\n", ""):
             with self.subTest(commands=commands):
-                result = subprocess.run([sys.executable, "-B", "Main.py", "--seed", "7", "--floors", "1"],
+                result = subprocess.run([sys.executable, "-B", "Main.py", "--quick-start", "--seed", "7", "--floors", "1"],
                                         cwd=ROOT, input=commands, text=True,
                                         capture_output=True, timeout=10)
                 self.assertEqual(result.returncode, 0, result.stderr)

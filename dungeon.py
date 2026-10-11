@@ -6,7 +6,10 @@ from lore_notes import NOTES
 from collections import deque
 import random
 
-from loot_library import Loot, TREASURE_BUNDLES
+from loot_library import (
+    Loot, TREASURE_BUNDLES, ember_stone, mana_draught, rare_equipment,
+    suitable_weapon_name, valuable,
+)
 from room import Room
 from room_library import make_enemy, make_warden
 
@@ -31,10 +34,13 @@ class Dungeon:
     start = (0, 0)
     boss_position = (3, 2)
 
-    def __init__(self, rng: random.Random, floor: int = 1) -> None:
+    def __init__(self, rng: random.Random, floor: int = 1, class_id: str = "fighter") -> None:
         if not 1 <= floor <= len(FLOORS):
             raise ValueError("Invalid dungeon floor.")
+        if class_id not in ("fighter", "rogue", "wizard"):
+            raise ValueError("Invalid adventurer class.")
         self.floor = floor
+        self.class_id = class_id
         self.theme = FLOORS[floor - 1]
         self.lore = LORE[floor - 1]
         self.rooms: dict[tuple[int, int], Room] = {}
@@ -149,6 +155,51 @@ class Dungeon:
         for position in positions[3:]:
             self.rooms[position].enemy = make_enemy(rng)
         self.rooms[self.boss_position].enemy = make_warden()
+        # Generate extras only after the original placement and monster rolls.
+        # Loot variety therefore cannot alter this floor's layout or enemies.
+        self._enrich_treasure(rng, [weapon_position, *positions[:3]])
+
+    def _enrich_treasure(self, rng: random.Random, cache_positions: list[tuple[int, int]]) -> None:
+        extras = (
+            (valuable(self.floor),),
+            (valuable(self.floor, 1),),
+            (valuable(self.floor, 2), ember_stone()),
+            (valuable(self.floor, 3), mana_draught()),
+        )
+        for index, position in enumerate(cache_positions):
+            room = self.rooms[position]
+            original = room.loot
+            weapon_name = original.weapon_name
+            if weapon_name and self.class_id != "fighter":
+                weapon_name = suitable_weapon_name(self.class_id, original.weapon_bonus)
+            equipment = {}
+            # Keep the first-floor opening weapon guaranteed, with additional
+            # upgrades rare rather than giving every chamber another weapon.
+            guaranteed_weapon = index == 0 and self.floor == 1
+            if not guaranteed_weapon and rng.random() < 0.15:
+                equipment = rare_equipment(rng, self.floor, self.class_id)
+            room.loot = Loot(
+                gold=original.gold,
+                potions=original.potions,
+                weapon_name=equipment.get("weapon_name", weapon_name),
+                weapon_bonus=equipment.get("weapon_bonus", original.weapon_bonus),
+                items=extras[index],
+                armor_name=equipment.get("armor_name"),
+                armor_bonus=equipment.get("armor_bonus", 0),
+            )
+
+        for room in self.rooms.values():
+            if not room.enemy:
+                continue
+            items = ()
+            if rng.random() < 0.35:
+                kind = rng.randrange(6)
+                item = (valuable(self.floor, kind) if kind < 4 else
+                        ember_stone() if kind == 4 else mana_draught())
+                items = (item,)
+            equipment = rare_equipment(rng, self.floor, self.class_id) if rng.random() < 0.08 else {}
+            if items or equipment:
+                room.loot = Loot(items=items, **equipment)
 
     def get_room(self, position: tuple[int, int]) -> Room:
         return self.rooms[position]
@@ -169,7 +220,7 @@ class Dungeon:
                     marker = "?"
                 elif room.enemy and room.enemy.is_alive:
                     marker = "B" if room.enemy.boss else "E"
-                elif room.loot and not room.looted:
+                elif room.loot and room.loot.has_treasure and not room.looted:
                     marker = "$"
                 elif room.note and not room.note_collected:
                     marker = "N"

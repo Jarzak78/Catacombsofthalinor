@@ -20,6 +20,7 @@ class AttackResult:
     critical: bool
     damage: int
     armor_class: int = 0
+    extra_damage: int = 0
 
     @property
     def critical_fail(self) -> bool:
@@ -60,13 +61,16 @@ def roll_attack(
     advantage: bool = False,
     disadvantage: bool = False,
     critical_on_hit: bool = False,
+    extra_damage_dice: tuple[int, int] | None = None,
 ) -> AttackResult:
     """Resolve one attack against Armor Class and roll damage on a hit.
 
     Advantage and Disadvantage together cancel. A natural 1 always misses;
     a natural 20 always hits critically. Other attacks hit when their total
     meets or exceeds Armor Class. Critical hits roll twice the weapon dice,
-    adding the flat damage bonus once. Damage cannot be negative.
+    adding the flat damage bonus once. Optional extra damage dice (such as
+    Sneak Attack) belong to the same hit and double on a critical hit;
+    the zero-damage floor is applied after combining all dice and modifiers.
 
     ``critical_on_hit`` models effects such as attacking an Unconscious
     target from within 5 feet. It only converts successful hits to critical
@@ -83,11 +87,17 @@ def roll_attack(
     hit = roll != 1 and (roll == 20 or total >= armor_class)
     critical = hit and (roll == 20 or critical_on_hit)
     damage = 0
+    extra_damage = 0
     if hit:
         count, sides = damage_dice
-        damage = max(0, roll_dice(rng, count * (2 if critical else 1), sides) + damage_bonus)
+        multiplier = 2 if critical else 1
+        rolled = roll_dice(rng, count * multiplier, sides)
+        if extra_damage_dice is not None:
+            extra_count, extra_sides = extra_damage_dice
+            extra_damage = roll_dice(rng, extra_count * multiplier, extra_sides)
+        damage = max(0, rolled + extra_damage + damage_bonus)
 
-    return AttackResult(rolls, roll, total, hit, critical, damage, armor_class)
+    return AttackResult(rolls, roll, total, hit, critical, damage, armor_class, extra_damage)
 
 
 def roll_initiative(rng: random.Random, bonus: int) -> int:

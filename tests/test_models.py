@@ -433,14 +433,15 @@ class DungeonTests(unittest.TestCase):
                 self.assertIsNone(entrance.loot)
                 boss_rooms = [room for room in dungeon.rooms.values() if room.enemy and room.enemy.boss]
                 ordinary = [room for room in dungeon.rooms.values() if room.enemy and not room.enemy.boss]
-                treasures = [room for room in dungeon.rooms.values() if room.loot]
+                treasures = [room for room in dungeon.rooms.values() if room.loot and not room.enemy]
                 self.assertEqual(len(boss_rooms), 1)
                 self.assertEqual(boss_rooms[0].position, dungeon.boss_position)
                 self.assertEqual(len(ordinary), 6)
                 self.assertGreaterEqual(sum(room.enemy.xp_reward for room in ordinary), 300)
                 self.assertEqual(len(treasures), 4)
                 for room in dungeon.rooms.values():
-                    self.assertFalse(room.enemy and room.loot)
+                    if room.loot:
+                        self.assertTrue(room.loot.has_treasure)
 
     def test_monsters_begin_alive_with_valid_combat_and_reward_stats(self):
         for seed in range(20):
@@ -474,7 +475,7 @@ class DungeonTests(unittest.TestCase):
                 self.assertTrue(any(room.position in adjacent for room in upgrades))
                 for room in loot_rooms:
                     loot = room.loot
-                    self.assertTrue(loot.gold or loot.potions or loot.weapon_bonus)
+                    self.assertTrue(loot.has_treasure)
                     if loot.weapon_bonus:
                         self.assertTrue(loot.weapon_name)
 
@@ -489,7 +490,7 @@ class DungeonTests(unittest.TestCase):
     def test_map_reveals_encounters_and_updates_cleared_rooms(self):
         dungeon = Dungeon(random.Random(9))
         enemy_room = next(room for room in dungeon.rooms.values() if room.enemy and not room.enemy.boss)
-        treasure_room = next(room for room in dungeon.rooms.values() if room.loot)
+        treasure_room = next(room for room in dungeon.rooms.values() if room.loot and not room.enemy)
         boss_room = dungeon.get_room(dungeon.boss_position)
         for room in (enemy_room, treasure_room, boss_room):
             room.visited = True
