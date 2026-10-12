@@ -100,7 +100,7 @@ A nearby first-floor treasure room always holds a +1 weapon suited to
 your class: longsword, rapier, or magical staff.
 
 Entering a room with a living foe shows only combat information: the enemy,
-initiative, any ambush result, your turn, and combat commands. Room descriptions,
+any scouting or initiative result, your turn, and combat commands. Room descriptions,
 exits, treasure, and documents wait until the fight is over. During combat,
 `look` keeps the same focused view. After victory, type `look` to examine the
 room and discover what you can collect.
@@ -132,7 +132,7 @@ automatically; a weaker find never downgrades what you use.
 | `examine`, `inspect`, `examine foe` | Study your current foe's description, HP, AC, attacks, and tactical clues. |
 | `attack` / `a` | Use an action for a weapon attack; Wizards use Fire Bolt instead. |
 | `strike` | Make one physical weapon strike, including a Wizard's staff; Warriors use `attack` for Extra Attack. |
-| `hide` | Rogue: try to hide, gaining Advantage for a successful hidden attack. |
+| `hide` | Rogue: try to hide for Advantage on your next attack; your first attempt is free after spotting a new room's foe unnoticed. |
 | `cast <spell>` | Wizard: cast `firebolt`, `missile`, `armor`, `shield`, `frost`, or `fireball`. |
 | `dodge` / `d` | Use an action to impose Disadvantage on enemy attacks until your next turn. |
 | `disengage` / `flee` / `f` | Use an action and movement to retreat without an opportunity attack; level-2+ Rogues use a bonus action. |
@@ -160,21 +160,33 @@ foe follows the opening-encounter rules below.
 
 ## Shared combat rules
 
-- Initiative is `d20 + Dexterity modifier`, rolled when an encounter begins.
-  The adventurer wins ties as this game's chosen DM ruling.
-- Winning initiative gives you a free `examine` before your first action
+- On your first entry into a room containing a living foe, you make a
+  **Perception check** against DC 12 before it can attack. Warriors and
+  Wizards use `d20 + Wisdom modifier`; Rogues add twice their proficiency
+  bonus through Perception expertise. Success lets you spot the monster
+  unnoticed and take the first turn, regardless of initiative. You can
+  examine it freely, attack normally, or, as a Rogue, try one free opening
+  Hide check before attacking. Failed scouting uses normal initiative;
+  if the monster goes first, that failed check gives its opening attack
+  Advantage without a second Perception roll. Safe rooms and rooms with
+  defeated foes require no check.
+- Initiative is `d20 + Dexterity modifier` when normal initiative is
+  needed. The adventurer wins ties as this game's chosen DM ruling.
+- Spotting a new foe unnoticed or winning initiative gives you a free
+  `examine` before your first action
   or the end of your opening turn. A bonus action or Action Surge does
   not use up this chance. Otherwise, your first examination costs one
   action. Once studied, you can examine that foe again for free during
   the encounter. Examining rolls no dice and advances no time; you must
   be alive and fighting a foe.
-- If the monster wins initiative, it ambushes you. You automatically
-  make this game's **Perception save** against DC 12. Warriors and Wizards
-  use `d20 + Wisdom modifier`; Rogues add twice their proficiency bonus
-  through Perception expertise. Success lets its opening
-  strike proceed normally; failure gives that strike Advantage. Later
-  attacks get no ambush Advantage, and you do not lose a turn. Natural
-  1 and 20 have no special effect on this save. This is a house rule.
+- Reentering a room with a living foe does not repeat its first-entry
+  scouting check or offer another unnoticed opening. Normal initiative
+  applies; if the monster goes first, make this game's **Perception save**
+  against DC 12, using the same bonus as the scouting check. Success lets
+  its opening strike proceed normally; failure gives that strike
+  Advantage. Ambush Advantage applies only to the opening strike, and
+  you do not lose a turn. Natural 1 and 20 have no special effect on
+  Perception checks or saves. These are game house rules.
 - Weapon attacks roll `d20 + attack ability modifier + proficiency + magic
   weapon bonus` against Armor Class. Warriors and Wizard staff attacks use
   Strength; Rogue rapier attacks use Dexterity. Wizard spell attacks use
@@ -236,7 +248,16 @@ after a successful hit.
 
 Use **hide** to roll a Stealth check against `DC 12 + dungeon floor`. Success
 gives Advantage on your next attack and Disadvantage to enemy attacks until
-you reveal yourself by attacking. Hiding costs an action at level 1;
+you reveal yourself by attacking. If your first-entry Perception check
+spots a foe unnoticed, you may attempt Hide **once for free** before your
+first action or ending your opening turn. This preserves both your action
+and bonus action. Success lets you attack from hiding; a failed opening
+Hide alerts the monster and immediately rolls normal initiative, without
+ambush Advantage because you already spotted it. A hidden attack spends
+your normal attack action and reveals you even if it misses. Spotting a
+foe alone does not grant attack Advantage or Sneak Attack.
+
+Outside that opening opportunity, hiding costs an action at level 1;
 **Cunning Action** makes it a bonus action from level 2, and also lets you
 flee using a bonus action instead of an action. Hidden status ends when you
 attack. **Sneak Attack** adds `ceil(level / 2)d6` once per turn when an
@@ -424,7 +445,8 @@ state = game.get_state()       # Redraw from the updated state
 
 Snapshots expose floor/scene, class, abilities, player equipment/resources,
 spell slots, carried valuables, turn budgets,
-encounter initiative and examination availability,
+encounter scouting and initiative results, whether a foe is unaware,
+opening Hide and examination availability,
 visited room descriptions/exits/enemies/loot, portal status, and vendor
 stock with stable item ids. Unvisited room contents are hidden. Reading a
 snapshot does not advance randomness or time; changing it cannot mutate

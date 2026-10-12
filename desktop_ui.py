@@ -345,6 +345,12 @@ class DungeonWindow:
         self.map_label.set(self.map_state["label"])
         self.draw_map()
         ability = {"fighter": "Second Wind", "rogue": "Hide", "wizard": "Spells"}[p["class_id"]]
+        if p["class_id"] == "rogue":
+            encounter = state["encounter"]
+            if encounter["enemy_unaware"] and encounter["hidden"]:
+                ability = "Sneak Attack"
+            elif encounter["opening_hide_available"]:
+                ability = "Hide (opening)"
         self.class_action.configure(text=ability)
         self.restart_button.configure(state="normal" if state["over"] else "disabled")
         current = next((room for room in state["rooms"] if room["position"] == state["position"]), {})
@@ -385,7 +391,11 @@ class DungeonWindow:
             finally:
                 self.spell_menu.grab_release()
         else:
-            self.send_command("wind" if class_id == "fighter" else "hide")
+            game = self.session.game
+            if class_id == "rogue" and game.enemy_unaware and game.hidden:
+                self.send_command("attack")
+            else:
+                self.send_command("wind" if class_id == "fighter" else "hide")
 
     def new_adventure(self) -> None:
         if self.session.game is None or not self.session.game.over:
@@ -435,6 +445,8 @@ def run_gui_smoke(report_path: Path, name: str = "Adventurer", seed: int | None 
         for class_id in CLASS_NAMES:
             app.class_buttons[class_id].invoke()
             assert app.session.class_id == class_id
+        app.class_buttons["rogue"].invoke()
+        assert app.session.class_id == "rogue"
         checks.append("class_choice")
         app.roll_button.invoke()
         root.update()
@@ -470,12 +482,56 @@ def run_gui_smoke(report_path: Path, name: str = "Adventurer", seed: int | None 
         assert sum(node["marker"] == "?" for node in initial_map["nodes"]) == 11
         assert sum(node["marker"] == "@" for node in initial_map["nodes"]) == 1
         assert app.map_canvas.find_all()
+        # Exercise the opening opportunity through actual movement and class
+        # buttons, with dice recorded to catch a premature enemy attack.
+        from room import Enemy
+        class OpeningRolls:
+            def __init__(self):
+                self.values = iter((12, 12, 15, 10, 4, 5))
+                self.calls = []
+            def randint(self, low, high):
+                self.calls.append((low, high))
+                value = next(self.values)
+                assert low <= value <= high
+                return value
+        game = app.session.game
         direction = next(iter(app.session.game.room.exits))
+        target = game.dungeon.rooms[game.room.exits[direction]]
+        assert not target.visited
+        target.enemy = Enemy("Unwary marauder", 30, 30, 12, 3, (1, 6), 1, 50, 3)
+        game.rng = OpeningRolls()
+        hp_before = game.player.hp
         app.movement_buttons[direction].invoke()
         root.update()
         assert sum(node["visited"] for node in app.map_state["nodes"]) == 2
         assert app.map_state == minimap_data(app.session.game.get_state())
         checks.append("minimap")
+        assert game.enemy_unaware and game.opening_hide_available
+        assert game.get_state()["encounter"]["scouting"] is not None
+        assert game.player.hp == hp_before and game.actions_remaining == 1
+        assert game.rng.calls == [(1, 20)]
+        assert app.class_action.cget("text") == "Hide (opening)"
+        checks.append("room_scouting")
+        bonus_before = game.bonus_action_available
+        app.class_action.invoke()
+        root.update()
+        assert game.hidden and game.enemy_unaware and not game.opening_hide_available
+        assert game.actions_remaining == 1 and game.bonus_action_available == bonus_before
+        assert game.player.hp == hp_before and game.rng.calls == [(1, 20), (1, 20)]
+        assert app.class_action.cget("text") == "Sneak Attack"
+        checks.append("rogue_opening_hide")
+        enemy_hp_before = game.enemy.hp
+        expected_damage = 4 + game.player.damage_bonus + 5
+        app.class_action.invoke()
+        root.update()
+        assert game.enemy.hp == enemy_hp_before - expected_damage
+        assert game.player.hp == hp_before and game.actions_remaining == 0
+        assert not game.hidden and not game.enemy_unaware and not game.opening_hide_available
+        assert game.bonus_action_available == bonus_before
+        assert game.rng.calls == [(1, 20)] * 4 + [(1, 8), (1, 6)]
+        assert "Sneak Attack:" in app.terminal.get("1.0", "end")
+        assert app.class_action.cget("text") == "Hide"
+        checks.append("rogue_opening_sneak")
         root.geometry("960x740")
         root.update()
         for widget in (app.command_entry, app.send_button, app.class_action, app.restart_button):
@@ -483,7 +539,6 @@ def run_gui_smoke(report_path: Path, name: str = "Adventurer", seed: int | None 
             assert widget.winfo_rooty() + widget.winfo_height() <= root.winfo_rooty() + root.winfo_height(), "A control is cut off at minimum window size."
         checks.append("responsive_layout")
         # A real enemy strike must end the run and enable a clean restart.
-        from room import Enemy
         class FatalRolls:
             def __init__(self):
                 self.calls = []

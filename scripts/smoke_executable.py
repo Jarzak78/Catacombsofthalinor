@@ -52,8 +52,8 @@ def main() -> int:
     if not game.won:
         raise RuntimeError("The reference adventure did not reach victory.")
     encounter_text = "\n".join(transcript)
-    if "Examining " not in encounter_text or "Perception save:" not in encounter_text:
-        raise RuntimeError("The reference adventure did not exercise examination and ambush saves.")
+    if "Examining " not in encounter_text or "Perception check:" not in encounter_text:
+        raise RuntimeError("The reference adventure did not exercise examination and room scouting.")
     scenarios = [
         ("full adventure", 7, ["--quick-start"], "\n".join(commands) + "\n",
          ("Your first dungeon is conquered",), 0),
@@ -80,10 +80,18 @@ def main() -> int:
             raise RuntimeError(f"The reference {class_id} did not win all five floors and collect twenty notes.")
         if attack_text not in "\n".join(class_transcript):
             raise RuntimeError(f"The reference {class_id} did not exercise its class attacks.")
+        class_evidence = ("Your first dungeon is conquered", "Floor 5/5",
+                          f"You are a first-level {class_id.title()}", attack_text,
+                          "Perception check:")
+        if class_id == "rogue":
+            if "Opening Hide:" not in "\n".join(class_transcript):
+                raise RuntimeError("The reference Rogue did not exercise its free opening Hide.")
+            class_evidence += ("Opening Hide:",
+                               "Your opening Hide attempt spends no action or bonus action.")
         scenarios.append((
             f"{class_id.title()} full adventure", seed, ["--quick-start", "--class", class_id],
             "\n".join(class_commands) + "\n",
-            ("Your first dungeon is conquered", "Floor 5/5", f"{class_id.title()} 1", attack_text), 0,
+            class_evidence, 0,
         ))
     with TemporaryDirectory(prefix="thalinor-smoke-") as working_directory:
         for name, seed, options, command_text, expected, roll_blocks in scenarios:
@@ -101,8 +109,8 @@ def main() -> int:
             if name == "full adventure" and "Floor 5/5" not in result.stdout:
                 raise RuntimeError("Executable adventure did not reach the fifth floor.")
             if name == "full adventure" and ("Examining " not in result.stdout
-                                             or "Perception save:" not in result.stdout):
-                raise RuntimeError("Executable adventure did not exercise examination and ambush saves.")
+                                             or "Perception check:" not in result.stdout):
+                raise RuntimeError("Executable adventure did not exercise examination and room scouting.")
             print(f"PASS: {name}")
     return 0
 

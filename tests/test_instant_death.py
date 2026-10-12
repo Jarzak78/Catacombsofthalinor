@@ -53,15 +53,15 @@ class InstantDeathTests(unittest.TestCase):
                 game.dungeon.get_room(destination).enemy = Enemy(
                     "Ambush sentry", 100, 100, 12, 3, (1, 6), 1, 50, 7)
                 game.player.hp = 3
-                # Enemy wins initiative; failed Perception grants two attack d20s.
-                game.rng = ClassRandom([2, 20, 1, 19, 18, 2])
+                # Entry Perception fails; enemy initiative grants an advantaged strike.
+                game.rng = ClassRandom([1, 2, 20, 19, 18, 2])
                 output = game.handle_command(direction)
                 self.assert_dead(game, output)
                 self.assertEqual(game.position, destination)
                 self.assertEqual(game.round_number, 0)
                 self.assertEqual(game.elapsed_minutes, 1)
                 self.assertEqual(game.rng.calls,
-                                 [(1, 20, 2), (1, 20, 20), (1, 20, 1),
+                                 [(1, 20, 1), (1, 20, 2), (1, 20, 20),
                                   (1, 20, 19), (1, 20, 18), (1, 6, 2)])
                 self.assertFalse(game.free_examine_available)
                 self.assertNotIn("Combat:", "\n".join(output))

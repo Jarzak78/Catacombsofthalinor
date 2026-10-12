@@ -43,6 +43,9 @@ class ExamineTests(unittest.TestCase):
         self.assertFalse(game.ambush_advantage)
         self.assertIsNone(game.initiative_result)
         self.assertIsNone(game.perception_result)
+        self.assertIsNone(game.scouting_result)
+        self.assertFalse(game.enemy_unaware)
+        self.assertFalse(game.opening_hide_available)
         self.assertIsNone(game.get_state()["encounter"]["foe_details"])
 
     def test_winning_initiative_offers_examination_without_extra_rolls_or_cost(self):
@@ -73,17 +76,19 @@ class ExamineTests(unittest.TestCase):
         self.assertEqual(game.player.hp, 12)
         self.assertEqual(len(game.rng.calls), 2)
 
-    def test_room_entry_rolls_initiative_and_then_offers_examination(self):
+    def test_successful_room_scouting_offers_examination_without_initiative(self):
         game = Game(seed=7)
         direction, destination = next(iter(game.room.exits.items()))
         game.dungeon.get_room(destination).enemy = Enemy(
             "Door sentry", 100, 100, 12, 3, (1, 6), 1, 50, 7)
-        game.rng = EncounterRandom([18, 2])
+        game.rng = EncounterRandom([18])
         output = game.handle_command(direction)
         self.assertEqual(game.position, destination)
         self.assertEqual(game.elapsed_minutes, 1)
         self.assertTrue(game.free_examine_available)
-        self.assertIn("Initiative", "\n".join(output))
+        self.assertTrue(game.enemy_unaware)
+        self.assertEqual(game.rng.calls, [(1, 20, 18)])
+        self.assertIn("Perception", "\n".join(output))
         self.assertIn("examine", "\n".join(output).lower())
 
     def test_examination_after_losing_initiative_spends_only_one_action(self):
@@ -286,12 +291,12 @@ class ExamineTests(unittest.TestCase):
 
 
 class AmbushTests(unittest.TestCase):
-    def test_losing_initiative_rolls_perception_before_an_advantaged_first_strike(self):
+    def test_failed_entry_perception_grants_an_advantaged_first_strike_when_foe_wins(self):
         game = Game(seed=7)
         direction, destination = next(iter(game.room.exits.items()))
         game.dungeon.get_room(destination).enemy = Enemy(
             "Door sentry", 100, 100, 12, 3, (1, 6), 1, 50, 7)
-        game.rng = EncounterRandom([2, 20, 1, 2, 15, 3, 10])
+        game.rng = EncounterRandom([1, 2, 20, 2, 15, 3, 10])
         output = game.handle_command(direction)
         text = "\n".join(output)
         self.assertIn("Perception", text)

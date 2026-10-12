@@ -39,6 +39,12 @@ def complete_class_adventure(class_id, seed, floors=5):
             player = game.player
             if game.free_examine_available:
                 act("examine")
+            if class_id == "rogue" and game.opening_hide_available:
+                act("hide")
+                # A failed opening Hide resolves initiative and may expose
+                # the Rogue to an immediate attack before choosing tactics.
+                if game.over or game.enemy is None:
+                    break
             if (player.hp <= player.max_hp - 4 and game.bonus_action_available
                     and player.potions):
                 act("potion")
@@ -50,7 +56,9 @@ def complete_class_adventure(class_id, seed, floors=5):
                         elif player.level == 1 and turn == 0:
                             act("hide")
                     if game.actions_remaining:
-                        if (player.ember_stones and game.enemy.hp >= 10
+                        if game.hidden and game.enemy_unaware:
+                            act("attack")
+                        elif (player.ember_stones and game.enemy.hp >= 10
                                 and player.level < 3):
                             act("ember")
                         else:
@@ -181,14 +189,20 @@ class ClassCampaignTests(unittest.TestCase):
                 self.assertGreaterEqual(game.player.armor_bonus, 4)
                 self.assertGreaterEqual(game.player.gold, 0)
                 self.assertIn(evidence, "\n".join(transcript))
+                self.assertIn("Perception check:", "\n".join(transcript))
                 self.assertTrue(any("Mira buys your treasure" in line for line in transcript))
-                self.assertIn("rest", commands)
+                self.assertTrue(any(command in ("rest", "potion") for command in commands))
                 self.assertNotIn("wind", commands)
                 self.assertNotIn("surge", commands)
                 if class_id == "wizard":
+                    self.assertIn("rest", commands)
                     self.assertIn("long rest", commands)
                     for spell in ("cast armor", "cast missile", "cast frost", "cast fireball"):
                         self.assertIn(spell, commands)
+                else:
+                    self.assertIn("Opening Hide:", "\n".join(transcript))
+                    self.assertIn("Your opening Hide attempt spends no action or bonus action.",
+                                  "\n".join(transcript))
 
     def test_source_launcher_replays_both_complete_campaigns_outside_checkout(self):
         for class_id, seed in (("rogue", 0), ("wizard", 1)):
@@ -209,6 +223,10 @@ class ClassCampaignTests(unittest.TestCase):
                 self.assertIn("20 collected note(s)", result.stdout)
                 self.assertIn(game.player.class_name, result.stdout)
                 self.assertIn("Mira buys your treasure", result.stdout)
+                self.assertIn("Perception check:", result.stdout)
+                if class_id == "rogue":
+                    self.assertIn("Opening Hide:", result.stdout)
+                    self.assertIn("Sneak Attack:", result.stdout)
 
 
 if __name__ == "__main__":

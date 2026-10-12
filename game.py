@@ -41,9 +41,13 @@ Potions heal 2d4+2; Second Wind heals 1d10 + fighter level.
 Each combat turn has an action and a bonus action. Type 'end' when done.
 Other informational and invalid commands do not spend actions or advance combat.
 Winning initiative (including ties) lets you examine before your first action for free.
-If the monster acts first, roll a Perception save vs DC 12 (Rogues add expertise).
-Failure gives its opening attack Advantage; success means a normal attack.
-This ambush save is a house rule; it never skips your turn or causes fumble damage.
+In a new hostile room, a Perception check vs DC 12 can spot the foe before it notices you.
+Success gives you the opening turn and a free examination. Rogues can try 'hide' once
+without spending an action or bonus action, then attack from hiding for Sneak Attack.
+Failed opening Hide alerts the foe: roll initiative normally, without ambush Advantage.
+If entry Perception fails, roll initiative; a monster acting first has ambush Advantage.
+Revisiting a hostile room uses initiative and the usual Perception ambush save vs DC 12.
+Perception checks and saves use Wisdom; Rogues add expertise. They cause no fumble damage.
 Short rests recover Warrior Second Wind and Action Surge, or once-per-long-rest
 Wizard Arcane Recovery. Any class can spend Hit Dice to heal. 'rest 0' saves your dice; 'rest 1' caps
 spending at one die. Plain 'rest' spends dice until healed or out of dice.
@@ -163,6 +167,12 @@ class Game:
         else:
             cost = "1 action"
         abilities = {"fighter": "wind", "rogue": "hide", "wizard": "cast <spell>"}
+        if self.enemy_unaware:
+            if self.player.class_id == "rogue" and self.hidden:
+                return "The foe is unaware. Use 'attack' for an advantaged Sneak Attack, or examine it for free."
+            if self.opening_hide_available:
+                return "The foe is unaware. Choose 'hide' (one free attempt), 'attack', or 'examine' (free)."
+            return "The foe is unaware. Strike first with 'attack', or 'examine' it for free."
         return (f"Combat: attack, dodge, potion, {abilities[self.player.class_id]}, flee, end; "
                 f"examine ({cost}). 'skills' lists abilities.")
 
@@ -178,7 +188,7 @@ class Game:
             f"STR {player.strength} | DEX {player.dexterity} | INT {player.intelligence} | "
             f"CON {player.constitution} | WIS {player.wisdom} | CHA {player.charisma}",
             f"Hit Dice {player.hit_dice_remaining}/{player.level} (d{player.hit_die_sides}) | "
-            f"Perception save {player.perception_bonus:+d} | Ambush DC 12",
+            f"Perception {player.perception_bonus:+d} | Spotting and ambush DC 12",
         ]
         if player.class_id == "fighter":
             lines.append(f"Second Wind {player.second_wind_uses}/{player.max_second_wind_uses}")
@@ -198,6 +208,8 @@ class Game:
 
     def turn_status(self) -> str:
         bonus = "ready" if self.bonus_action_available else "spent"
+        if self.enemy_unaware:
+            return f"Foe unaware | Opening actions left: {self.actions_remaining} | Bonus action: {bonus}"
         return f"Round {self.round_number} | Actions left: {self.actions_remaining} | Bonus action: {bonus}"
 
     def handle_command(self, raw: str) -> list[str]:
@@ -297,6 +309,14 @@ class Game:
         self.sneak_attack_used = False
         self.shield_active = False
         self.uncanny_dodge_available = True
+        self.scouting_result = None
+        self.enemy_unaware = False
+        self.opening_hide_available = False
+
+    def reveal_opening(self) -> None:
+        """An action or the end of the opening turn alerts a spotted foe."""
+        self.enemy_unaware = False
+        self.opening_hide_available = False
 
     def examine_foe(self) -> list[str]:
         """Study a foe once; revisiting acquired information is free."""
@@ -312,6 +332,7 @@ class Game:
             if self.actions_remaining <= 0:
                 return ["Examining this foe needs one action. Wait until you have an action available."]
             self.actions_remaining -= 1
+            self.reveal_opening()
             cost = "You spend one action studying your foe. Your bonus action is unchanged."
         self.foe_examined = True
         self.free_examine_available = False
@@ -335,24 +356,58 @@ class Game:
             return ["There is no passage in that direction."]
         self.previous_position = self.position
         self.position = target
+        first_visit = not self.room.visited
         self.clear_encounter()
         self.room.visited = True
         self.elapsed_minutes += 1
         if self.enemy:
             lines = [self.foe_summary()]
-            lines.extend(self.begin_encounter())
+            lines.extend(self.begin_encounter(scout=first_visit))
             if self.enemy and self.player.is_conscious:
                 lines.append(self.combat_options())
             return lines
         return self.describe_room()
 
-    def begin_encounter(self) -> list[str]:
+    def begin_encounter(self, *, scout: bool = False) -> list[str]:
         if not self.player.is_alive:
             return []
         self.clear_encounter()
         enemy = self.enemy
         if enemy is None:
             return []
+        if scout:
+            roll = self.rng.randint(1, 20)
+            bonus = self.player.perception_bonus
+            total, dc = roll + bonus, 12
+            success = total >= dc
+            self.scouting_result = {"roll": roll, "bonus": bonus, "total": total,
+                                    "dc": dc, "success": success}
+            lines = [f"Perception check: d20 [{roll}] {bonus:+d} = {total} vs DC {dc}. "
+                     + ("Success! You spot the foe first." if success else
+                        "Failure! The foe notices your arrival.")]
+            if success:
+                self.round_number = 0
+                self.dodging = self.enemy_sapped = False
+                self.enemy_unaware = True
+                self.opening_hide_available = self.player.class_id == "rogue"
+                self.free_examine_available = True
+                self.initiative_result = {"player": None, "enemy": None,
+                                          "hero_first": True, "source": "scouting"}
+                lines.append(f"{enemy.name} has not noticed you. You act first; 'examine' is free.")
+                return [*lines, *self.begin_turn()]
+            return [*lines, *self._roll_encounter_initiative(entry_failed=True)]
+        return self._roll_encounter_initiative()
+
+    def _roll_encounter_initiative(self, *, entry_failed: bool = False,
+                                  ambush_allowed: bool = True,
+                                  preserve_opening_budget: bool = False) -> list[str]:
+        """Resolve ordinary initiative after failed spotting or revealed stealth."""
+        enemy = self.enemy
+        if enemy is None or not self.player.is_alive:
+            return []
+        opening_budget = (self.actions_remaining, self.bonus_action_available)
+        self.reveal_opening()
+        self.free_examine_available = False
         hero_roll = roll_initiative(self.rng, self.player.initiative_bonus)
         enemy_roll = roll_initiative(self.rng, enemy.initiative_bonus)
         self.round_number = 0
@@ -363,24 +418,36 @@ class Game:
         lines = [f"Initiative: you {hero_roll}, {enemy.name} {enemy_roll}. "
                  "Ties go to the adventurer."]
         if enemy_roll > hero_roll:
-            perception_roll = self.rng.randint(1, 20)
-            bonus = self.player.perception_bonus
-            total = perception_roll + bonus
-            dc = 12
-            success = total >= dc
-            self.perception_result = {"roll": perception_roll, "bonus": bonus,
-                                      "total": total, "dc": dc, "success": success}
-            self.ambush_advantage = not success
-            lines.append(f"Ambush! {enemy.name} lunges before you can study it.")
-            lines.append(f"Perception save: d20 [{perception_roll}] {bonus:+d} = {total} vs DC {dc}. "
-                         + ("Success! You spot the attack; it has no ambush Advantage." if success
-                            else "Failure! The monster's opening attack has Advantage."))
+            if not ambush_allowed:
+                lines.append(f"{enemy.name} reacts first. You already spotted it; this is no ambush.")
+            elif entry_failed:
+                self.ambush_advantage = True
+                lines.append(f"Ambush! {enemy.name}'s opening attack has Advantage after your failed spotting check.")
+            else:
+                perception_roll = self.rng.randint(1, 20)
+                bonus = self.player.perception_bonus
+                total = perception_roll + bonus
+                dc = 12
+                success = total >= dc
+                self.perception_result = {"roll": perception_roll, "bonus": bonus,
+                                          "total": total, "dc": dc, "success": success}
+                self.ambush_advantage = not success
+                lines.append(f"Ambush! {enemy.name} lunges before you can study it.")
+                lines.append(f"Perception save: d20 [{perception_roll}] {bonus:+d} = {total} vs DC {dc}. "
+                             + ("Success! You spot the attack; it has no ambush Advantage." if success
+                                else "Failure! The monster's opening attack has Advantage."))
             lines.extend(self.enemy_turn())
         else:
             self.free_examine_available = True
             lines.append("You act first! 'examine' is free before your first action.")
         if self.enemy is not None and self.player.is_alive:
-            lines.extend(self.begin_turn())
+            turn_lines = self.begin_turn()
+            if preserve_opening_budget and hero_roll >= enemy_roll:
+                # Failing to hide cannot refund a bonus action already spent
+                # before this same opening turn's first enemy response.
+                self.actions_remaining, self.bonus_action_available = opening_budget
+                turn_lines = [self.turn_status()]
+            lines.extend(turn_lines)
         return lines
 
     def begin_turn(self) -> list[str]:
@@ -388,6 +455,7 @@ class Game:
             return []
         if self.round_number > 0:
             self.free_examine_available = False
+            self.reveal_opening()
         self.round_number += 1
         self.actions_remaining = 1
         self.bonus_action_available = True
@@ -420,6 +488,7 @@ class Game:
             return ["Your action is spent. Use an available bonus action or 'end'."]
         self.actions_remaining -= 1
         self.free_examine_available = False
+        self.reveal_opening()
         advantage = self.player.class_id == "rogue" and (self.hidden or self.rogue_vex)
         sneak_eligible = advantage and not self.sneak_attack_used
         self.hidden = self.rogue_vex = False
@@ -517,6 +586,8 @@ class Game:
     def enemy_turn(self) -> list[str]:
         if not self.player.is_alive:
             return []
+        if self.enemy_unaware:
+            return ["The foe has not noticed you. Choose your opening action, or 'end' to give up the opening."]
         ambush_advantage = self.ambush_advantage
         self.ambush_advantage = False
         enemy = self.enemy
@@ -559,6 +630,7 @@ class Game:
         if not self.player.is_alive:
             return self.death_message()
         self.free_examine_available = False
+        self.reveal_opening()
         if self.enemy is None:
             return ["There is no combat turn to end. Explore or rest."]
         self.elapsed_minutes += 0.1
@@ -576,6 +648,7 @@ class Game:
             return ["Your action is already spent."]
         self.actions_remaining -= 1
         self.free_examine_available = False
+        self.reveal_opening()
         self.dodging = True
         return ["You Dodge. Visible enemy attacks have Disadvantage until your next turn.",
                 self.turn_status()]
@@ -699,8 +772,9 @@ class Game:
                     "attack / strike: Dexterity-based rapier; a hit applies Vex (your next attack has Advantage).",
                     f"Sneak Attack: {p.sneak_attack_dice_count}d6 extra on an advantaged hit, once per turn; critical hits double these dice.",
                     "hide: Stealth check vs DC 12 + dungeon floor; action at level 1, bonus action from level 2.",
+                    "Spot a new foe with Perception to get one free opening Hide attempt, then attack before it notices you.",
                     "Hiding gives enemy attacks Disadvantage and your next attack Advantage; attacking reveals you.",
-                    "Expertise: double proficiency on Stealth and the ambush Perception save.",
+                    "Expertise: double proficiency on Stealth, room-entry Perception, and the ambush save.",
                     "Cunning Action: from level 2, 'flee' uses a bonus action and avoids an opportunity attack.",
                     "Uncanny Dodge: from level 5, automatically halve one incoming hit per turn while conscious."]
         return ["Wizard abilities — cast <spell>; each spell below costs one action except Shield",
@@ -724,6 +798,19 @@ class Game:
             return ["Save hiding for a foe you need to evade."]
         if self.hidden:
             return ["You are already hidden; your next attack has Advantage."]
+        if self.enemy_unaware and self.opening_hide_available:
+            self.opening_hide_available = False
+            roll = self.rng.randint(1, 20)
+            total, dc = roll + self.player.stealth_bonus, 12 + self.floor
+            self.hidden = total >= dc
+            lines = [f"Opening Hide: d20 [{roll}] {self.player.stealth_bonus:+d} = {total} vs DC {dc}. "
+                     + ("You vanish into shadow; the foe remains unaware. 'attack' can deliver a Sneak Attack."
+                        if self.hidden else "The foe catches your movement! You are revealed."),
+                     "Your opening Hide attempt spends no action or bonus action."]
+            if self.hidden:
+                return [*lines, self.turn_status()]
+            return [*lines, *self._roll_encounter_initiative(
+                ambush_allowed=False, preserve_opening_budget=True)]
         bonus = self.player.level >= 2
         if bonus:
             error = self.bonus_action_error()
@@ -780,6 +867,7 @@ class Game:
             else:
                 self.actions_remaining -= 1
                 self.free_examine_available = False
+                self.reveal_opening()
         if spell == "armor":
             self.player.mage_armor_active = True
             return [f"Mage Armor shimmers around you. AC {self.player.armor_class}; lasts until your next long rest."]
@@ -787,6 +875,7 @@ class Game:
             self.shield_active = True
             return [f"A luminous Shield unfolds. AC {self.player.armor_class + 5} against the next enemy strike.", self.turn_status()]
         if spell in ("firebolt", "frost"):
+            self.hidden = False
             dice = (2 if self.player.level >= 5 else 1, 10) if spell == "firebolt" else (3, 8)
             result = roll_attack(self.rng, self.player.spell_attack_bonus, enemy.armor_class, dice, 0)
             label = "Fire Bolt" if spell == "firebolt" else "Frost Lance"
@@ -812,9 +901,11 @@ class Game:
                 self.enemy_sapped = True
                 lines.append("Frost binds the foe; its next attack has Disadvantage before your next turn.")
         elif spell == "missile":
+            self.hidden = False
             damage = roll_dice(self.rng, 3, 4) + 3
             lines = [f"Three Magic Missiles strike {enemy.name} for {damage} force damage!"]
         else:
+            self.hidden = False
             damage = roll_dice(self.rng, 8, 6)
             save_roll = self.rng.randint(1, 20)
             total = save_roll + enemy.initiative_bonus
@@ -1057,6 +1148,8 @@ class Game:
             return ["You have no Ember stones. Buy them from Mira."]
         self.actions_remaining -= 1
         self.free_examine_available = False
+        self.reveal_opening()
+        self.hidden = False
         self.player.ember_stones -= 1
         damage = roll_dice(self.rng, 3, 6)
         enemy.take_damage(damage)
@@ -1113,6 +1206,9 @@ class Game:
                     "sneak_attack_used": self.sneak_attack_used,
                     "shield_active": self.shield_active,
                     "uncanny_dodge_available": self.uncanny_dodge_available,
+                    "scouting": dict(self.scouting_result) if self.scouting_result else None,
+                    "enemy_unaware": self.enemy_unaware,
+                    "opening_hide_available": self.opening_hide_available,
                 },
                 "turn": {"round": self.round_number, "actions": self.actions_remaining,
                          "bonus_action": self.bonus_action_available},

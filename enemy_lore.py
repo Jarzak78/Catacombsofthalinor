@@ -84,6 +84,8 @@ _UNKNOWN_PROFILE = (
 
 _CLASS_TACTICS = {
     "rogue": (
+        "If you spot a new room's foe unnoticed, your first opening Hide "
+        "attempt is free. "
         "A successful Hide check gives your next rapier attack Advantage. "
         "A rapier hit applies Vex to your next attack against this foe. "
         "Advantage allows Sneak Attack once per turn; a critical hit "

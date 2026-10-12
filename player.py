@@ -215,7 +215,7 @@ class Player:
 
     @property
     def perception_bonus(self) -> int:
-        """Wisdom, plus the rogue's Perception expertise against ambushes."""
+        """Wisdom and rogue expertise for spotting foes and avoiding ambushes."""
         expertise = 2 * self.proficiency_bonus if self.class_id == "rogue" else 0
         return self.wisdom_modifier + expertise
 
