@@ -198,16 +198,16 @@ class ExamineTests(unittest.TestCase):
         self.assertEqual(game.perform(Action("examine")), expected)
         self.assertEqual(game.get_state(), reference.get_state())
 
-    def test_no_enemy_shop_and_unconscious_examination_do_not_spend_resources(self):
-        for scene in ("no enemy", "shop", "unconscious"):
+    def test_no_enemy_shop_and_dead_examination_do_not_spend_resources(self):
+        for scene in ("no enemy", "shop", "dead"):
             with self.subTest(scene=scene):
                 game = Game(seed=7) if scene == "no enemy" else encounter_game([18, 2])
                 if scene != "no enemy":
                     game.begin_encounter()
                 if scene == "shop":
                     game.in_shop = True
-                elif scene == "unconscious":
-                    game.player.hp = 0
+                elif scene == "dead":
+                    game.player.take_damage(game.player.hp)
                 if scene == "no enemy":
                     game.rng = EncounterRandom()
                 state, clock, calls = game.get_state(), game.elapsed_minutes, list(game.rng.calls)
@@ -411,16 +411,18 @@ class AmbushTests(unittest.TestCase):
         self.assertEqual(game.player.xp, 50)
         self.assertEqual(game.player.gold, 7)
 
-    def test_ambush_and_unconscious_advantage_do_not_stack_extra_d20s(self):
-        game = encounter_game([18, 2, 2, 15, 1, 1])
+    def test_pending_ambush_after_death_does_not_attack_or_roll(self):
+        game = encounter_game([18, 2])
         game.begin_encounter()
-        game.player.hp = 0
+        game.player.take_damage(game.player.hp)
         game.ambush_advantage = True
+        before = game.get_state()
         output = game.enemy_turn()
-        self.assertIn("d20 [2/15]", "\n".join(output))
-        self.assertIn("Critical hit", "\n".join(output))
-        self.assertEqual(game.player.death_save_failures, 2)
-        self.assertFalse(game.ambush_advantage)
+        self.assertEqual(output, [])
+        self.assertTrue(game.player.dead)
+        self.assertTrue(game.over)
+        self.assertEqual(game.get_state(), before)
+        self.assertEqual(game.rng.calls, [(1, 20, 18), (1, 20, 2)])
         self.assertFalse(game.rng.values)
 
     def test_perception_snapshot_is_detached_and_does_not_reroll_the_check(self):

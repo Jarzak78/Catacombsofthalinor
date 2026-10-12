@@ -10,6 +10,7 @@ from tempfile import TemporaryDirectory
 REQUIRED_CHECKS = frozenset({
     "title_screen", "character_creation", "class_choice", "4d6_drop_lowest",
     "one_reroll", "enter_dungeon", "command_submission", "minimap",
+    "instant_death", "post_death_actions", "new_adventure",
 })
 
 

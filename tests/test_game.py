@@ -63,9 +63,6 @@ def complete_adventure(seed, floors=1):
         for _ in range(200):
             if game.over or game.enemy is None:
                 break
-            if not game.player.is_conscious:
-                act("end")
-                continue
             if game.free_examine_available:
                 act("examine")
             if game.player.hp <= game.player.max_hp - 5 and game.bonus_action_available:
@@ -246,30 +243,35 @@ class TurnTests(unittest.TestCase):
         self.assertEqual(game.player.hp, 12)
         self.assertEqual(game.player.xp, 50)
 
-    def test_unconscious_player_cannot_drink_their_own_potion(self):
+    def test_dead_player_cannot_drink_their_own_potion(self):
         game = combat_game()
-        game.player.hp = 0
+        game.player.take_damage(game.player.hp)
         game.handle_command("potion")
         self.assertEqual(game.player.hp, 0)
         self.assertEqual(game.player.potions, 3)
+        self.assertTrue(game.over)
 
-    def test_natural_twenty_death_save_restores_action_on_that_turn(self):
-        game = combat_game([1, 1, 20])
-        game.player.hp = 0
-        game.handle_command("end")  # Enemy misses with Advantage; death save rolls 20.
-        self.assertEqual(game.player.hp, 1)
-        self.assertEqual(game.actions_remaining, 1)
-        self.assertTrue(game.bonus_action_available)
-        self.assertFalse(game.over)
-
-    def test_melee_hit_on_unconscious_character_critically_fails_death_saves(self):
-        game = combat_game([18, 19, 1, 1])
-        game.player.hp = 0
-        game.player.death_save_failures = 1
+    def test_ending_turn_after_death_cannot_restore_hit_points_or_actions(self):
+        game = combat_game()
+        game.player.take_damage(game.player.hp)
+        game.actions_remaining = 0
+        game.bonus_action_available = False
+        before = game.get_state()
         output = game.handle_command("end")
+        self.assertEqual(game.get_state(), before)
+        self.assertEqual(game.player.hp, 0)
+        self.assertIn("over", "\n".join(output).lower())
+
+    def test_lethal_critical_hit_ends_adventure_on_that_attack(self):
+        game = combat_game([20, 1, 1])
+        game.player.hp = 3
+        output = game.handle_command("end")
+        self.assertEqual(game.player.hp, 0)
         self.assertTrue(game.player.dead)
         self.assertTrue(game.over)
         self.assertIn("Critical hit", "\n".join(output))
+        self.assertIn("You die", "\n".join(output))
+        self.assertEqual(game.round_number, 1)
 
 
 class ExplorationTests(unittest.TestCase):

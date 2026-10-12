@@ -136,7 +136,7 @@ class ClassModelTests(unittest.TestCase):
             self.assertEqual(player.max_spell_slots, {})
             self.assertFalse(player.spend_spell_slot(1))
 
-    def test_spell_casting_cannot_spend_slots_while_unconscious(self):
+    def test_spell_casting_cannot_spend_slots_at_zero_hp(self):
         wizard = Player.create(class_id="wizard")
         wizard.hp = 0
         self.assertFalse(wizard.spend_spell_slot(1))

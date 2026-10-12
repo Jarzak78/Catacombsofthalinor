@@ -153,13 +153,13 @@ class NoteLootTests(unittest.TestCase):
                 game.handle_command('loot')
                 self.assertEqual(game.get_state(), state)
 
-    def test_enemy_unconsciousness_and_vendor_prevent_note_collection(self):
-        for situation in ('enemy', 'unconscious', 'shop'):
+    def test_enemy_death_and_vendor_prevent_note_collection(self):
+        for situation in ('enemy', 'zero HP', 'shop'):
             with self.subTest(situation=situation):
                 game = Game(seed=7)
                 if situation == 'enemy':
                     game.room.enemy = Enemy('Note guard', 2, 2, 10, 0, (1, 4), 0, 0, 0)
-                elif situation == 'unconscious':
+                elif situation == 'zero HP':
                     game.player.hp = 0
                 else:
                     game.in_shop = True
@@ -287,14 +287,14 @@ class JournalStateTests(unittest.TestCase):
         self.assertIn(note.text, '\n'.join(game.handle_command('read 1')))
 
     def test_journal_and_read_are_informational_in_every_game_context(self):
-        for situation in ('exploration', 'combat', 'unconscious', 'shop', 'won', 'quit', 'dead'):
+        for situation in ('exploration', 'combat', 'zero HP', 'shop', 'won', 'quit', 'dead'):
             with self.subTest(situation=situation):
                 game = Game(seed=7)
                 game.handle_command('loot')
                 note = game.journal[0]
-                if situation in ('combat', 'unconscious'):
+                if situation in ('combat', 'zero HP'):
                     game.room.enemy = Enemy('Note guard', 2, 2, 10, 0, (1, 4), 0, 0, 0)
-                if situation == 'unconscious':
+                if situation == 'zero HP':
                     game.player.hp = 0
                 elif situation == 'shop':
                     game.in_shop = True

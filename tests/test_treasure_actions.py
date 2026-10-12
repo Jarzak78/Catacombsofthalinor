@@ -103,7 +103,7 @@ class TreasureActionTests(unittest.TestCase):
         self.assert_command_pure(game, "sell all")
 
     def test_collection_guards_leave_every_reward_and_note_unclaimed(self):
-        for reason in ("live foe", "shop", "unconscious", "dead"):
+        for reason in ("live foe", "shop", "zero HP", "dead"):
             with self.subTest(reason=reason):
                 game = treasure_game("wizard", Loot(
                     gold=17, potions=2, weapon_name="Rare staff +3", weapon_bonus=3,
@@ -115,7 +115,7 @@ class TreasureActionTests(unittest.TestCase):
                     game.room.enemy = Enemy("Sentry", 10, 10, 12, 3, (1, 6), 1, 50, 7)
                 elif reason == "shop":
                     game.in_shop = True
-                elif reason == "unconscious":
+                elif reason == "zero HP":
                     game.player.hp = 0
                 else:
                     game.player.dead = True

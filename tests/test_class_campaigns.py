@@ -37,9 +37,6 @@ def complete_class_adventure(class_id, seed, floors=5):
             if game.over or game.enemy is None:
                 break
             player = game.player
-            if not player.is_conscious:
-                act("end")
-                continue
             if game.free_examine_available:
                 act("examine")
             if (player.hp <= player.max_hp - 4 and game.bonus_action_available

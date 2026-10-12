@@ -48,7 +48,7 @@ Short rests recover Warrior Second Wind and Action Surge, or once-per-long-rest
 Wizard Arcane Recovery. Any class can spend Hit Dice to heal. 'rest 0' saves your dice; 'rest 1' caps
 spending at one die. Plain 'rest' spends dice until healed or out of dice.
 Long rests restore HP and all resources.
-At 0 HP you are unconscious: 'end' lets combat and death saves continue.
+At 0 HP you die immediately and the adventure ends. Healing and rests cannot revive you.
 Hostile rooms show combat only. After victory, use 'look' to examine the room.
 In a safe room, 'look' hints at loot; 'loot' reveals exact items and collects them.
 Collect treasure with 'loot'. Defeat each guardian, then use 'portal' to shop."""
@@ -106,7 +106,7 @@ class Game:
 
     @property
     def over(self) -> bool:
-        return self.won or self.quit_requested or self.player.dead
+        return self.won or self.quit_requested or not self.player.is_alive
 
     def introduction(self) -> list[str]:
         return [
@@ -152,8 +152,8 @@ class Game:
         return f"{enemy.name} blocks your way! HP {enemy.hp}/{enemy.max_hp}, AC {enemy.armor_class}."
 
     def combat_options(self) -> str:
-        if not self.player.is_conscious:
-            return "You are unconscious. Type 'end' to continue combat."
+        if not self.player.is_alive:
+            return "You are dead. Start a new adventure to try again."
         if self.foe_examined:
             cost = "reread free"
         elif self.free_examine_available:
@@ -190,9 +190,8 @@ class Game:
                                                    for level, count in player.max_spell_slots.items()))
         if player.class_id == "rogue":
             lines.append(f"Stealth {player.stealth_bonus:+d} | Sneak Attack {player.sneak_attack_dice_count}d6 once per turn")
-        if not player.is_conscious and not player.dead:
-            lines.append(f"Unconscious | Death saves: {player.death_save_successes} successes, "
-                         f"{player.death_save_failures} failures | Stable: {player.stable}")
+        if not player.is_alive:
+            lines.append("Dead | Your adventure has ended.")
         elif self.enemy:
             lines.append(self.turn_status())
         return lines
@@ -220,7 +219,7 @@ class Game:
         if action.kind == "read":
             return self.read_note(action.argument)
         if self.over:
-            return ["This adventure is over. Run Main.py to begin another."]
+            return ["This adventure is over. Start a new adventure to try again."]
         command = action.kind
         if action.argument:
             command += " " + action.argument
@@ -249,10 +248,6 @@ class Game:
         if command == "quit":
             self.quit_requested = True
             return ["You leave the trial for another day. Your first dungeon can wait."]
-        if not self.player.is_conscious:
-            if command == "end":
-                return self.end_turn()
-            return ["You are unconscious and cannot act. Type 'end' to continue combat."]
         if command == "portal":
             return self.enter_portal()
         if command == "shop":
@@ -331,6 +326,8 @@ class Game:
                 f"Tactical clue: {details['tactics']}", self.turn_status()]
 
     def move(self, direction: str) -> list[str]:
+        if not self.player.is_alive:
+            return self.death_message()
         if self.enemy:
             return ["An enemy blocks your way. Use Disengage ('flee') to retreat safely."]
         target = self.room.exits.get(direction)
@@ -350,6 +347,8 @@ class Game:
         return self.describe_room()
 
     def begin_encounter(self) -> list[str]:
+        if not self.player.is_alive:
+            return []
         self.clear_encounter()
         enemy = self.enemy
         if enemy is None:
@@ -380,11 +379,13 @@ class Game:
         else:
             self.free_examine_available = True
             lines.append("You act first! 'examine' is free before your first action.")
-        if self.enemy is not None or not self.player.is_conscious:
+        if self.enemy is not None and self.player.is_alive:
             lines.extend(self.begin_turn())
         return lines
 
     def begin_turn(self) -> list[str]:
+        if not self.player.is_alive:
+            return []
         if self.round_number > 0:
             self.free_examine_available = False
         self.round_number += 1
@@ -394,21 +395,6 @@ class Game:
         self.enemy_sapped = False
         self.sneak_attack_used = False
         self.uncanny_dodge_available = True
-        if self.player.dead:
-            return []
-        if not self.player.is_conscious:
-            if self.player.stable:
-                return ["You are stable but unconscious. "
-                        + ("The enemy is still dangerous; type 'end'." if self.enemy
-                           else "The room is safe; type 'end' to recover and wake.")]
-            outcome = self.player.death_save(self.rng)
-            if outcome == "natural20":
-                return ["Death save: natural 20! You recover 1 HP and rise, spending half your movement.",
-                        self.turn_status()]
-            if outcome == "dead":
-                return self.death_message()
-            return [f"Death save: {outcome}. Successes {self.player.death_save_successes}, "
-                    f"failures {self.player.death_save_failures}. Type 'end' to continue."]
         return [self.turn_status()]
 
     def attack(self) -> list[str]:
@@ -425,6 +411,8 @@ class Game:
         return lines
 
     def attack_once(self) -> list[str]:
+        if not self.player.is_alive:
+            return self.death_message()
         enemy = self.enemy
         if enemy is None:
             return ["There is no enemy here to attack."]
@@ -448,10 +436,8 @@ class Game:
         if result.critical_fail:
             self.player.take_damage(result.fumble_damage)
             lines.append(f"Your HP: {self.player.hp}/{self.player.max_hp}.")
-            if self.player.dead:
+            if not self.player.is_alive:
                 return [*lines, *self.death_message()]
-            if not self.player.is_conscious:
-                return [*lines, "You are unconscious at 0 HP. Type 'end' to continue."]
         if result.hit:
             enemy.take_damage(result.damage)
             if self.player.class_id == "fighter":
@@ -504,6 +490,8 @@ class Game:
                 + ("Critical hit! " if result.critical else "") + story)
 
     def defeat_enemy(self, enemy: Enemy) -> list[str]:
+        if not self.player.is_alive:
+            return self.death_message()
         self.player.gold += enemy.gold_reward
         levels = self.player.gain_xp(enemy.xp_reward)
         self.dodging = False
@@ -527,18 +515,18 @@ class Game:
         return lines
 
     def enemy_turn(self) -> list[str]:
+        if not self.player.is_alive:
+            return []
         ambush_advantage = self.ambush_advantage
         self.ambush_advantage = False
         enemy = self.enemy
-        if enemy is None or self.player.dead:
+        if enemy is None:
             return []
-        unconscious = not self.player.is_conscious
         result = roll_attack(
             self.rng, enemy.attack_bonus, self.player.armor_class + (5 if self.shield_active else 0),
             enemy.damage_dice, enemy.damage_bonus,
-            advantage=unconscious or ambush_advantage,
-            disadvantage=self.enemy_sapped or ((self.dodging or self.hidden) and not unconscious),
-            critical_on_hit=unconscious,
+            advantage=ambush_advantage,
+            disadvantage=self.enemy_sapped or self.dodging or self.hidden,
         )
         self.enemy_sapped = False
         self.shield_active = False
@@ -558,37 +546,30 @@ class Game:
         if result.hit:
             self.player.take_damage(result.damage, critical=result.critical)
         lines.append(f"Your HP: {self.player.hp}/{self.player.max_hp}.")
-        if self.player.dead:
+        if not self.player.is_alive:
             lines.extend(self.death_message())
-        elif not self.player.is_conscious:
-            lines.append("You are unconscious at 0 HP. Close-range hits can cause two failed death saves.")
         return lines
 
     @staticmethod
     def death_message() -> list[str]:
-        return ["You die in the catacombs. Your first trial ends here.",
-                "Run Main.py again to try a new adventure."]
+        return ["You die in the catacombs at 0 HP. Your adventure ends here.",
+                "Choose 'New Adventure' in the window, or restart the game to try again."]
 
     def end_turn(self) -> list[str]:
+        if not self.player.is_alive:
+            return self.death_message()
         self.free_examine_available = False
         if self.enemy is None:
-            if not self.player.dead and not self.player.is_conscious:
-                if self.player.stable:
-                    hours = self.rng.randint(1, 4)
-                    self.elapsed_minutes += hours * 60
-                    self.player.heal(1)
-                    return [f"With the room safe, you recover for {hours} hour(s) and wake with 1 HP.",
-                            *self.status()]
-                self.elapsed_minutes += 0.1
-                return self.begin_turn()
             return ["There is no combat turn to end. Explore or rest."]
         self.elapsed_minutes += 0.1
         lines = self.enemy_turn()
-        if not self.player.dead and (self.enemy is not None or not self.player.is_conscious):
+        if self.player.is_alive and self.enemy is not None:
             lines.extend(self.begin_turn())
         return lines
 
     def dodge(self) -> list[str]:
+        if not self.player.is_alive:
+            return self.death_message()
         if not self.enemy:
             return ["There is no enemy to dodge."]
         if self.actions_remaining <= 0:
@@ -600,6 +581,8 @@ class Game:
                 self.turn_status()]
 
     def disengage(self) -> list[str]:
+        if not self.player.is_alive:
+            return self.death_message()
         if not self.enemy:
             return ["There is no enemy to disengage from."]
         if self.previous_position is None:
@@ -630,6 +613,8 @@ class Game:
         return []
 
     def drink_potion(self) -> list[str]:
+        if not self.player.is_alive:
+            return self.death_message()
         error = self.bonus_action_error()
         if error:
             return error
@@ -644,6 +629,8 @@ class Game:
                 f"Potions left: {self.player.potions}."]
 
     def second_wind(self) -> list[str]:
+        if not self.player.is_alive:
+            return self.death_message()
         if self.player.class_id != "fighter":
             return ["Second Wind is a Warrior ability. Use 'skills' for your class abilities."]
         error = self.bonus_action_error()
@@ -660,6 +647,8 @@ class Game:
                 f"Uses left: {self.player.second_wind_uses}."]
 
     def action_surge(self) -> list[str]:
+        if not self.player.is_alive:
+            return self.death_message()
         if self.player.class_id != "fighter":
             return ["Action Surge is a Warrior ability. Use 'skills' for your class abilities."]
         if not self.enemy:
@@ -673,6 +662,8 @@ class Game:
         return ["Action Surge! You gain one additional action this turn.", self.turn_status()]
 
     def short_rest(self, dice_limit: int | None = None) -> list[str]:
+        if not self.player.is_alive:
+            return self.death_message()
         if self.enemy:
             return ["You cannot rest while an enemy threatens you."]
         self.elapsed_minutes += 60
@@ -725,6 +716,8 @@ class Game:
                 "These spell costs and durations are dungeon adaptations; 'stats' shows available slots."]
 
     def hide(self) -> list[str]:
+        if not self.player.is_alive:
+            return self.death_message()
         if self.player.class_id != "rogue":
             return ["Hide is a Rogue ability. Use 'skills' for your class abilities."]
         if not self.enemy:
@@ -751,6 +744,8 @@ class Game:
                    "The foe tracks your movement; you remain visible."), self.turn_status()]
 
     def cast_spell(self, spell: str) -> list[str]:
+        if not self.player.is_alive:
+            return self.death_message()
         if self.player.class_id != "wizard":
             return ["Spellcasting is a Wizard ability. Use 'skills' for your class abilities."]
         aliases = {"fire bolt": "firebolt", "magic missile": "missile", "mage armor": "armor",
@@ -810,10 +805,8 @@ class Game:
                             "bursts harmlessly against the stones.")]
             if result.critical_fail:
                 self.player.take_damage(result.fumble_damage)
-                if self.player.dead:
+                if not self.player.is_alive:
                     return [*lines, *self.death_message()]
-                if not self.player.is_conscious:
-                    return [*lines, "You are unconscious at 0 HP. Type 'end' to continue."]
             damage = result.damage
             if spell == "frost" and result.hit:
                 self.enemy_sapped = True
@@ -838,6 +831,8 @@ class Game:
         return lines
 
     def drink_mana(self) -> list[str]:
+        if not self.player.is_alive:
+            return self.death_message()
         if self.player.class_id != "wizard":
             return ["Only Wizards can use a mana draught to restore a spell slot."]
         error = self.bonus_action_error()
@@ -860,6 +855,8 @@ class Game:
         self.player.treasure_inventory.append(item)
 
     def sell(self, item_id: str) -> list[str]:
+        if not self.player.is_alive:
+            return self.death_message()
         if not self.in_shop:
             return ["Mira buys gems and jewelry in the portal sanctuary. Visit her to sell treasure."]
         selected = [item for item in self.player.treasure_inventory if item_id == "all" or item.id == item_id]
@@ -872,6 +869,8 @@ class Game:
         return [f"Mira buys your treasure for {value} gold. Gold: {self.player.gold}."]
 
     def long_rest(self) -> list[str]:
+        if not self.player.is_alive:
+            return self.death_message()
         if self.enemy or self.position != self.dungeon.start:
             return ["An eight-hour long rest is only safe at the entrance, away from enemies."]
         if self.elapsed_minutes - self.last_long_rest_end < 960:
@@ -963,6 +962,8 @@ class Game:
 
 
     def enter_portal(self) -> list[str]:
+        if not self.player.is_alive:
+            return self.death_message()
         if self.in_shop:
             return ["You are already in Mira's sanctuary."]
         if not self.floor_cleared or self.position != self.dungeon.boss_position:
@@ -983,6 +984,8 @@ class Game:
                 "Buy with 'buy <item id>'; sell with 'sell <item id>' or 'sell all'. Type 'descend' when done."]
 
     def buy(self, item_id: str) -> list[str]:
+        if not self.player.is_alive:
+            return self.death_message()
         if not self.in_shop:
             return ["You can only buy items at the vendor."]
         if item_id == "weapon":
@@ -1019,6 +1022,8 @@ class Game:
         return [f"Bought {item.name} for {item.price} gold. Gold remaining: {p.gold}."]
 
     def descend(self) -> list[str]:
+        if not self.player.is_alive:
+            return self.death_message()
         if not self.in_shop:
             return ["Use the guardian's portal and finish shopping before descending."]
         if self.floor == self.total_floors:
@@ -1041,6 +1046,8 @@ class Game:
                 self.dungeon.lore.arrival, "", *self.describe_room()]
 
     def use_ember(self) -> list[str]:
+        if not self.player.is_alive:
+            return self.death_message()
         enemy = self.enemy
         if enemy is None:
             return ["Save Ember stones for combat."]
@@ -1084,7 +1091,7 @@ class Game:
                 "story": {"arrival": self.dungeon.lore.arrival,
                           "revelation": self.dungeon.lore.revelation if self.floor_cleared else None},
                 "scene": "shop" if self.in_shop else "dungeon",
-                "position": list(self.position), "player": asdict(self.player),
+                "position": list(self.position), "player": {**asdict(self.player), "dead": not self.player.is_alive},
                 "journal": [asdict(note) for note in self.journal],
                 "armor_class": self.player.armor_class + (5 if self.shield_active else 0),
                 "attack_bonus": self.player.attack_bonus,

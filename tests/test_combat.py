@@ -86,7 +86,7 @@ class AttackTests(unittest.TestCase):
         self.assertEqual(result.damage, 0)
         self.assertEqual(rng.calls, [(1, 20)])
 
-    def test_unconscious_target_hit_is_critical(self):
+    def test_forced_critical_on_hit_doubles_damage_dice(self):
         rng = ScriptedRandom(12, 5, 7)
         result = roll_attack(rng, 3, 13, (1, 8), 2, critical_on_hit=True)
         self.assertTrue(result.hit)

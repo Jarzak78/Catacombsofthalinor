@@ -1,4 +1,4 @@
-"""Near misses and critical fumbles through dice, actions, and recovery."""
+"""Near misses and critical fumbles through dice, actions, and instant death."""
 
 import random
 import unittest
@@ -153,16 +153,16 @@ class CombatFumbleTests(unittest.TestCase):
         damage.assert_called_once_with(1)
         self.assertEqual(game.rng.calls, [(1, 20)])
 
-    def test_fumble_that_knocks_player_out_stops_extra_attack(self):
+    def test_lethal_fumble_stops_extra_attack_and_ends_adventure(self):
         game = scripted_game(1)
         game.player.gain_xp(6500)
         game.player.hp = 1
         output = game.handle_command("attack")
         self.assertEqual(game.player.hp, 0)
         self.assertFalse(game.player.is_conscious)
-        self.assertFalse(game.player.dead)
-        self.assertFalse(game.over)
-        self.assertEqual(game.player.death_save_failures, 0)
+        self.assertTrue(game.player.dead)
+        self.assertTrue(game.over)
+        self.assertIn("You die", "\n".join(output))
         self.assertEqual(game.enemy.hp, 100)
         self.assertEqual(game.actions_remaining, 0)
         self.assertNotIn("Extra Attack", "\n".join(output))
@@ -176,6 +176,9 @@ class CombatFumbleTests(unittest.TestCase):
         self.assertIn("Extra Attack", "\n".join(output))
         self.assertIn("Critical fail!", "\n".join(output))
         self.assertEqual(game.player.hp, 0)
+        self.assertTrue(game.player.dead)
+        self.assertTrue(game.over)
+        self.assertIn("You die", "\n".join(output))
         self.assertEqual(game.enemy.hp, 91)
         self.assertTrue(game.enemy_sapped)
         self.assertEqual(game.actions_remaining, 0)
@@ -252,58 +255,42 @@ class CombatFumbleTests(unittest.TestCase):
         self.assertNotIn("Actions left", "\n".join(output))
         self.assertEqual(game.rng.calls, [(1, 20)] * 4)
 
-    def test_enemy_self_kill_allows_unconscious_player_to_stabilize_and_recover(self):
-        game = scripted_game(1, 1, 10, 3)
+    def test_dead_player_cannot_wait_for_enemy_self_kill_or_gain_rewards(self):
+        game = scripted_game()
         game.enemy.hp = 1
-        game.player.hp = 0
-        game.player.death_save_successes = 2
+        game.player.take_damage(game.player.hp)
+        before = game.get_state()
         output = game.handle_command("end")
-        self.assertIsNone(game.enemy)
+        self.assertIsNotNone(game.enemy)
+        self.assertEqual(game.enemy.hp, 1)
         self.assertEqual(game.player.hp, 0)
-        self.assertTrue(game.player.stable)
-        self.assertFalse(game.over)
-        self.assertIn("Death save", "\n".join(output))
-        elapsed = game.elapsed_minutes
-        game.handle_command("end")
-        self.assertEqual(game.player.hp, 1)
-        self.assertTrue(game.player.is_conscious)
-        self.assertFalse(game.player.stable)
-        self.assertEqual(game.player.death_save_successes, 0)
-        self.assertEqual(game.player.death_save_failures, 0)
-        self.assertAlmostEqual(game.elapsed_minutes - elapsed, 180)
-        self.assertEqual(game.rng.calls, [(1, 20)] * 3 + [(1, 4)])
-
-    def test_unconscious_player_can_continue_death_saves_after_combat_ends(self):
-        game = scripted_game(1, 1, 10, 10, 10, 1)
-        game.enemy.hp = 1
-        game.player.hp = 0
-        game.handle_command("end")
-        self.assertEqual(game.player.death_save_successes, 1)
-        game.handle_command("end")
-        self.assertEqual(game.player.death_save_successes, 2)
-        game.handle_command("end")
-        self.assertTrue(game.player.stable)
-        game.handle_command("end")
-        self.assertEqual(game.player.hp, 1)
-        self.assertFalse(game.over)
-        self.assertEqual(game.player.xp, 50)
-        self.assertEqual(game.rng.calls, [(1, 20)] * 5 + [(1, 4)])
-
-    def test_failed_post_combat_death_save_can_end_adventure(self):
-        game = scripted_game(1, 1, 10, 2)
-        game.enemy.hp = 1
-        game.player.hp = 0
-        game.player.death_save_failures = 2
-        game.handle_command("end")
-        self.assertIsNone(game.enemy)
-        self.assertFalse(game.over)
-        game.handle_command("end")
         self.assertTrue(game.player.dead)
         self.assertTrue(game.over)
-        self.assertEqual(game.player.hp, 0)
-        game.handle_command("end")
-        self.assertEqual(game.player.xp, 50)
-        self.assertEqual(game.rng.calls, [(1, 20)] * 4)
+        self.assertIn("over", "\n".join(output).lower())
+        self.assertEqual(game.get_state(), before)
+        self.assertEqual((game.player.xp, game.player.gold), (0, 0))
+        self.assertEqual(game.rng.calls, [])
+
+    def test_death_in_a_safe_room_cannot_recover_by_ending_turn(self):
+        game = scripted_game()
+        game.room.enemy = None
+        game.player.take_damage(game.player.hp)
+        before = game.get_state()
+        for _ in range(4):
+            game.handle_command("end")
+            self.assertEqual(game.get_state(), before)
+        self.assertTrue(game.over)
+        self.assertEqual(game.rng.calls, [])
+
+    def test_enemy_turn_after_death_does_not_roll_or_award_rewards(self):
+        game = scripted_game()
+        game.enemy.hp = 1
+        game.player.take_damage(game.player.hp)
+        before = game.get_state()
+        self.assertEqual(game.enemy_turn(), [])
+        self.assertEqual(game.get_state(), before)
+        self.assertEqual((game.player.xp, game.player.gold), (0, 0))
+        self.assertEqual(game.rng.calls, [])
 
 
 if __name__ == "__main__":

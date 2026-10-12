@@ -9,7 +9,8 @@ A turn-based dungeon crawler with desktop and terminal interfaces,
 **Warrior, Rogue, and Wizard** adventurers, rolled starting abilities,
 and combat inspired by the revised
 2024 D&D 5e rules. Classes use the simplified abilities described below;
-the story, monsters, treasure, and dungeon rulings are original.
+the story, monsters, treasure, and dungeon rulings are original. This
+game's death rule is immediate: reaching zero HP ends the adventurer's run.
 
 ## Play
 
@@ -30,14 +31,16 @@ across the top. Type commands and press Enter or click **Send**, or use the
 direction and common-action buttons. Your class button offers **Second
 Wind**, **Hide**, or a **Spells** menu. Use the command box for resting,
 portals, shopping, and other commands listed below; the Up and Down keys
-recall earlier commands. When the adventure ends, its text remains visible
-and **New Adventure** lets you start another character.
+recall earlier commands. At zero HP, your adventurer dies immediately and
+gameplay stops. When the adventure ends, its text remains visible and
+**New Adventure** lets you start another character.
 
 Python and Tk are bundled, so you do not need to install Python or VS Code.
 The same ZIP also includes **CatacombsOfThalinor-Terminal.exe** for the
 original console interface. That version waits for Enter before closing
-after quitting, winning, or dying. Artifact downloads remain available for
-30 days; a new successful build refreshes the download.
+after quitting, winning, or dying; the finished adventure cannot continue
+while waiting. Artifact downloads remain available for 30 days; a new
+successful build refreshes the download.
 
 You can also launch it from a Windows terminal with options:
 
@@ -164,7 +167,7 @@ foe follows the opening-encounter rules below.
   not use up this chance. Otherwise, your first examination costs one
   action. Once studied, you can examine that foe again for free during
   the encounter. Examining rolls no dice and advances no time; you must
-  be conscious and fighting a foe.
+  be alive and fighting a foe.
 - If the monster wins initiative, it ambushes you. You automatically
   make this game's **Perception save** against DC 12. Warriors and Wizards
   use `d20 + Wisdom modifier`; Rogues add twice their proficiency bonus
@@ -198,13 +201,10 @@ foe follows the opening-encounter rules below.
   `4 + Constitution modifier` for Wizards. Leveling preserves missing HP
   rather than fully healing or recharging existing resources. Each level
   adds at least 1 HP, even with a very low Constitution score.
-- At zero HP, you are unconscious. Death saves happen at the start of
-  your turn: 10+ succeeds, natural 1 causes two failures, natural 20
-  restores 1 HP, three successes stabilize, and three failures kill.
-  Unconscious targets give attackers Advantage; successful attacks from
-  within five feet are critical hits and cause two failed saves. Massive
-  damage can cause instant death. A natural-20 recovery lets you rise
-  using half your movement and act on that turn.
+- At zero HP, your adventurer dies immediately and the adventure ends.
+  There are no death saving throws, stabilization, or recovery turns.
+  Healing, potions, class abilities, and rests cannot revive a dead
+  character. This is the game's chosen death rule.
 
 ## Adventurer classes
 
@@ -242,7 +242,7 @@ flee using a bonus action instead of an action. Hidden status ends when you
 attack. **Sneak Attack** adds `ceil(level / 2)d6` once per turn when an
 eligible rapier strike has Advantage; these dice double on a critical hit.
 At level 5, **Uncanny Dodge** automatically halves damage from one enemy hit
-per turn while you are conscious. The game applies it without a separate
+per turn while you are alive. The game applies it without a separate
 reaction command.
 
 ### Wizard
@@ -292,10 +292,10 @@ Higher-level progression statistics exist in the model; higher-level class
 features are outside the campaign's scope.
 
 Combatants fight within five feet; exits are close enough for normal
-movement, including after standing. Leaving combat uses Disengage;
-creatures guard their rooms and do not pursue. Monsters die at zero HP,
-while the adventurer makes death saves. Exploration proceeds room by room
-rather than on a tactical grid. Cleared rooms allow uninterrupted short
+movement. Leaving combat uses Disengage; creatures guard their rooms and
+do not pursue. Both monsters and the adventurer die at zero HP.
+Exploration proceeds room by room rather than on a tactical grid.
+Cleared rooms allow uninterrupted short
 rests; the entrance allows long rests. Time is simulated, and monsters
 do not respawn. These are explicit dungeon rules and scope choices.
 
@@ -313,9 +313,9 @@ python3 -m unittest discover -v
 ```
 
 The suite checks character creation, class abilities, attack and damage rolls,
-action budgets, healing, resources, death saves, generation, treasure, complete seeded
-adventures, desktop-session flow and minimap visibility, and a full adventure
-through the actual command-line entry point.
+action budgets, healing, resources, immediate death, generation, treasure,
+complete seeded adventures, desktop-session flow and minimap visibility,
+and a full adventure through the actual command-line entry point.
 
 `GuiMain.py` launches the desktop interface; `desktop_ui.py` builds its
 Tk screens, and `ui_controller.py` manages character creation and commands.
@@ -468,16 +468,14 @@ A **natural 1 on the d20 used for the attack** is a critical fail: the
 attack misses, the attacker suffers a comic slip or stumble, and loses
 **1 HP**. This is the game's house rule, added to the normal natural-1
 miss. Advantage/disadvantage uses the selected die; a discarded 1 does
-not trigger the mishap. Death-save natural 1s keep their existing rules
-and do not cause this attack penalty.
+not trigger the mishap.
 
-Self-damage can knock an adventurer unconscious or defeat a monster. An
-unconscious adventurer cannot make their second Extra Attack. A monster
-that defeats itself still grants XP/gold once, and a guardian still
-opens its floor's portal. If combat ends while you are unconscious,
-`end` continues death saves; once stable in the safe room, another `end`
-passes 1d4 recovery hours and restores 1 HP. Flavor text and fixed mishap
-damage consume no extra dice rolls, keeping seeded play reproducible.
+Self-damage can kill an adventurer or defeat a monster. At 1 HP, an
+adventurer's critical fail ends the run immediately, preventing a second
+Extra Attack or any later action. A monster that defeats itself still
+grants XP/gold once, and a guardian still opens its floor's portal.
+Flavor text and fixed mishap damage consume no extra dice rolls, keeping
+seeded play reproducible.
 
 ## Collectible lore and the journal
 

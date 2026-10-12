@@ -61,9 +61,6 @@ class Player:
     second_wind_uses: int = 2
     action_surge_available: bool = True
     hit_dice_remaining: int = 1
-    death_save_successes: int = 0
-    death_save_failures: int = 0
-    stable: bool = False
     dead: bool = False
     class_id: str = "fighter"
     mage_armor_active: bool = False
@@ -74,6 +71,9 @@ class Player:
 
     def __post_init__(self) -> None:
         """Normalize the class while keeping explicit statistics and HP."""
+        self.hp = max(0, self.hp)
+        if self.hp == 0:
+            self.dead = True
         if not isinstance(self.class_id, str):
             raise ValueError("Choose warrior, rogue, or wizard.")
         self.class_id = self.class_id.strip().lower()
@@ -293,20 +293,20 @@ class Player:
         """Restore one expended first-level wizard slot from a magic item."""
         maximum = self.max_spell_slots.get(1, 0)
         remaining = self.spell_slots.get(1, 0)
-        if self.class_id != "wizard" or remaining >= maximum:
+        if not self.is_alive or self.class_id != "wizard" or remaining >= maximum:
             return False
         self.spell_slots[1] = remaining + 1
         return True
 
     @property
     def is_alive(self) -> bool:
-        """Whether the player is alive, including at zero hit points."""
-        return not self.dead
+        """Whether the player has positive HP and has not died."""
+        return not self.dead and self.hp > 0
 
     @property
     def is_conscious(self) -> bool:
         """Whether the player can take actions."""
-        return self.hp > 0 and not self.dead
+        return self.is_alive
 
     @property
     def xp_to_next_level(self) -> int | None:
@@ -332,52 +332,36 @@ class Player:
         return self.class_id == "fighter" and self.second_wind_uses > 0
 
     def take_damage(self, amount: int, critical: bool = False) -> int:
-        """Apply resolved damage and return the hit points actually lost.
+        """Apply resolved damage; reaching zero HP ends the adventurer's life.
 
-        Excess damage at least equal to maximum HP causes instant death.
-        Damage while already at zero HP causes one failed death save, or
-        two when the damaging attack is a critical hit.
+        The optional critical flag is accepted for attack-call compatibility;
+        critical damage has already been calculated by the combat rules.
         """
         if amount < 0:
             raise ValueError("Damage cannot be negative.")
-        if self.dead or amount == 0:
+        if self.dead:
             return 0
 
-        previous_hp = self.hp
+        previous_hp = max(0, self.hp)
         lost = min(amount, previous_hp)
         self.hp = max(0, previous_hp - amount)
-        if self.hp > 0:
-            return lost
-
-        self.stable = False
-        if amount - previous_hp >= self.max_hp:
+        if self.hp == 0:
             self.dead = True
-        elif previous_hp == 0:
-            self.death_save_failures += 2 if critical else 1
-            if self.death_save_failures >= 3:
-                self.dead = True
         return lost
 
     def heal(self, amount: int) -> int:
-        """Restore HP, including unconsciousness, but never revive the dead."""
+        """Restore a living adventurer's HP without reviving the dead."""
         if amount < 0:
             raise ValueError("Healing cannot be negative.")
-        if self.dead:
+        if not self.is_alive:
             return 0
         restored = min(amount, self.max_hp - self.hp)
         self.hp += restored
-        if restored > 0:
-            self.death_save_successes = 0
-            self.death_save_failures = 0
-            self.stable = False
         return restored
 
     def use_potion(self, rng: random.Random) -> int:
-        """Consume a healing potion for 2d4 + 2 HP when useful.
-
-        The caller decides whether the potion is drunk or administered.
-        """
-        if self.dead or self.hp >= self.max_hp or self.potions <= 0:
+        """Consume a healing potion for 2d4 + 2 HP when useful and alive."""
+        if not self.is_alive or self.hp >= self.max_hp or self.potions <= 0:
             return 0
         self.potions -= 1
         return self.heal(rng.randint(1, 4) + rng.randint(1, 4) + 2)
@@ -398,7 +382,7 @@ class Player:
 
     def refresh_short_rest(self) -> None:
         """Recover one Second Wind use and Action Surge after a valid rest."""
-        if self.dead:
+        if not self.is_alive:
             return
         self.second_wind_uses = min(self.max_second_wind_uses, self.second_wind_uses + 1)
         self.action_surge_available = self.class_id == "fighter"
@@ -408,9 +392,6 @@ class Player:
         if not self.is_conscious:
             return
         self.hp = self.max_hp
-        self.death_save_successes = 0
-        self.death_save_failures = 0
-        self.stable = False
         self.second_wind_uses = self.max_second_wind_uses
         self.action_surge_available = self.class_id == "fighter"
         self.hit_dice_remaining = self.level
@@ -451,35 +432,3 @@ class Player:
         self.weapon_bonus = bonus
         return True
 
-    def death_save(self, rng: random.Random) -> str:
-        """Resolve one death save for an unstable player at zero HP.
-
-        Return natural20, success, failure, stable, or dead. No roll is
-        made for conscious, already stable, or dead players; those states
-        return conscious, stable, or dead respectively.
-        """
-        if self.dead:
-            return "dead"
-        if self.is_conscious:
-            return "conscious"
-        if self.stable:
-            return "stable"
-
-        roll = rng.randint(1, 20)
-        if roll == 20:
-            self.heal(1)
-            return "natural20"
-        if roll >= 10:
-            self.death_save_successes += 1
-            if self.death_save_successes >= 3:
-                self.stable = True
-                self.death_save_successes = 0
-                self.death_save_failures = 0
-                return "stable"
-            return "success"
-
-        self.death_save_failures += 2 if roll == 1 else 1
-        if self.death_save_failures >= 3:
-            self.dead = True
-            return "dead"
-        return "failure"

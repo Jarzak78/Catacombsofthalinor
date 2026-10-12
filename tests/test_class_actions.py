@@ -147,7 +147,7 @@ class WizardActionTests(ActionAssertions, unittest.TestCase):
         self.assertEqual(game.rng.calls, [(1, 4, 1), (1, 4, 2), (1, 4, 4)])
 
     def test_invalid_spell_and_missing_target_slot_or_action_are_pure(self):
-        for reason in ("unknown", "no target", "no slot", "no action", "unconscious"):
+        for reason in ("unknown", "no target", "no slot", "no action", "dead"):
             with self.subTest(reason=reason):
                 game = class_game("wizard")
                 command = "cast missile"
@@ -160,7 +160,7 @@ class WizardActionTests(ActionAssertions, unittest.TestCase):
                 elif reason == "no action":
                     game.actions_remaining = 0
                 else:
-                    game.player.hp = 0
+                    game.player.take_damage(game.player.hp)
                 self.assert_unchanged(game, command)
 
     def test_mage_armor_costs_action_in_combat_and_repeated_cast_is_pure(self):
@@ -473,16 +473,18 @@ class RogueActionTests(ActionAssertions, unittest.TestCase):
         game.enemy_turn()
         self.assertEqual(game.player.hp, 17)
 
-    def test_uncanny_dodge_is_not_spent_on_a_miss_or_used_when_unconscious(self):
-        game = class_game("rogue", [2, 15, 16, 2, 2], level=5)
+    def test_uncanny_dodge_is_not_spent_on_a_miss_or_used_after_death(self):
+        game = class_game("rogue", [2], level=5)
         game.enemy_turn()
         self.assertTrue(game.uncanny_dodge_available)
-        game.player.hp = 0
-        game.enemy_turn()
-        self.assertEqual(game.player.death_save_failures, 2)
+        game.player.take_damage(game.player.hp)
+        before = game.get_state()
+        self.assertEqual(game.enemy_turn(), [])
         self.assertEqual(game.player.hp, 0)
-        self.assertEqual(game.rng.calls, [(1, 20, 2), (1, 20, 15), (1, 20, 16),
-                                          (1, 6, 2), (1, 6, 2)])
+        self.assertTrue(game.over)
+        self.assertTrue(game.uncanny_dodge_available)
+        self.assertEqual(game.get_state(), before)
+        self.assertEqual(game.rng.calls, [(1, 20, 2)])
 
     def test_class_state_snapshot_is_detached_and_json_serializable(self):
         game = class_game("rogue", level=5)

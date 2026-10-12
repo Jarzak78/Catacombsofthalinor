@@ -72,9 +72,9 @@ def roll_attack(
     Sneak Attack) belong to the same hit and double on a critical hit;
     the zero-damage floor is applied after combining all dice and modifiers.
 
-    ``critical_on_hit`` models effects such as attacking an Unconscious
-    target from within 5 feet. It only converts successful hits to critical
-    hits; the caller must supply any associated Advantage separately.
+    ``critical_on_hit`` supports effects that make a successful attack
+    critical. It never overrides a miss; the caller supplies any
+    associated Advantage separately.
     """
     rolls = (rng.randint(1, 20),)
     if advantage != disadvantage:

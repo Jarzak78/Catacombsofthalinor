@@ -482,6 +482,39 @@ def run_gui_smoke(report_path: Path, name: str = "Adventurer", seed: int | None 
             assert widget.winfo_height() > 1
             assert widget.winfo_rooty() + widget.winfo_height() <= root.winfo_rooty() + root.winfo_height(), "A control is cut off at minimum window size."
         checks.append("responsive_layout")
+        # A real enemy strike must end the run and enable a clean restart.
+        from room import Enemy
+        class FatalRolls:
+            def __init__(self):
+                self.calls = []
+            def randint(self, low, high):
+                self.calls.append((low, high))
+                return 20 if high == 20 else 1
+        game = app.session.game
+        assert game.player.is_alive
+        game.player.take_damage(game.player.hp - 1)
+        game.room.enemy = Enemy("Practice guardian", 20, 20, 12, 3, (1, 6), 1, 50, 3)
+        game.clear_encounter()
+        game.dodging = game.enemy_sapped = False
+        game.rng = FatalRolls()
+        app.action_buttons["end"].invoke()
+        root.update()
+        assert game.over and game.player.dead and game.player.hp == 0
+        assert game.rng.calls == [(1, 20), (1, 6), (1, 6)]
+        assert "You die in the catacombs at 0 HP" in app.terminal.get("1.0", "end")
+        assert "Death save:" not in app.terminal.get("1.0", "end")
+        assert app.restart_button.instate(["!disabled"])
+        checks.append("instant_death")
+        dead_state = game.get_state()
+        app.action_buttons["potion"].invoke()
+        root.update()
+        assert game.get_state() == dead_state and len(game.rng.calls) == 3
+        checks.append("post_death_actions")
+        app.restart_button.invoke()
+        root.update()
+        assert app.screen == "title" and app.session.game is None and app.session.rolls is None
+        assert not app.history and not app.terminal.get("1.0", "end").strip()
+        checks.append("new_adventure")
         assert not errors, errors
         report["success"] = True
     except Exception as error:
