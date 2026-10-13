@@ -1,9 +1,16 @@
 """Combat narration without random draws or mutations to combat state."""
 from combat import AttackResult
+from monster_catalog import FLOOR_MONSTERS, MONSTERS_BY_NAME
+
+
+_ORIGINAL_MONSTERS = frozenset(spec.name for spec in FLOOR_MONSTERS[1])
 
 
 def _enemy_traits(name: str) -> tuple[str, str]:
-    """Return a strike and a surface for the campaign's original creatures."""
+    """Return authored traits, with familiar fallbacks for guardians and fixtures."""
+    spec = MONSTERS_BY_NAME.get(name)
+    if spec is not None:
+        return spec.strike, spec.surface
     lowered = name.lower()
     if "rat" in lowered or "stalker" in lowered:
         return "claw swipe", "tough hide"
@@ -97,6 +104,8 @@ def hit_description(attacker: str, defender: str, result: AttackResult) -> str:
 
 
 def miss_description(attacker: str, defender: str, result: AttackResult) -> str:
+    attacker_spec = MONSTERS_BY_NAME.get(attacker)
+    defender_spec = MONSTERS_BY_NAME.get(defender)
     if result.critical_fail:
         if attacker == "You":
             mishaps = (
@@ -106,6 +115,8 @@ def miss_description(attacker: str, defender: str, result: AttackResult) -> str:
             )
             # Attack bonuses change as equipment improves; prose never spends RNG.
             story = mishaps[result.total % len(mishaps)]
+        elif attacker_spec is not None and attacker_spec.fumble:
+            story = attacker_spec.fumble.format(attacker=attacker)
         elif "Rat" in attacker or "Stalker" in attacker:
             story = f"{attacker} lunges, tangles its feet, and lands nose-first on the stone. A fearsome entrance!"
         elif "Colossus" in attacker:
@@ -119,7 +130,10 @@ def miss_description(attacker: str, defender: str, result: AttackResult) -> str:
         return f"Critical fail! {story} The attacker takes {result.fumble_damage} HP of self-damage."
     if result.near_miss:
         if attacker == "You":
-            if "Rat" in defender or "Stalker" in defender:
+            if defender_spec is not None and defender not in _ORIGINAL_MONSTERS:
+                story = (f"Your blade brushes {defender}'s {defender_spec.surface}, "
+                         "just short of a telling blow.")
+            elif "Rat" in defender or "Stalker" in defender:
                 story = f"Your sword scrapes along {defender}'s tough hide, failing to bite."
             elif "Sentinel" in defender:
                 story = f"Your sword sparks against {defender}'s bark, barely missing a gap in the roots."
@@ -127,6 +141,9 @@ def miss_description(attacker: str, defender: str, result: AttackResult) -> str:
                 story = f"Your blade skids across {defender}'s iron plating in a shower of sparks."
             else:
                 story = f"Your sword sparks off {defender}'s defenses, just short of a telling blow."
+        elif attacker_spec is not None and attacker not in _ORIGINAL_MONSTERS:
+            story = (f"{attacker}'s {attacker_spec.strike} passes a hair's breadth "
+                     "from you; a fraction closer would have hurt.")
         elif "Rat" in attacker or "Stalker" in attacker:
             story = f"{attacker}'s claws glance off your armor, inches from finding a gap."
         elif "Sentinel" in attacker:

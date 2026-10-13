@@ -6,6 +6,7 @@ they are not official D&D monster stat blocks.
 
 import random
 
+from monster_catalog import MonsterSpec, floor_roster
 from room import Enemy
 
 
@@ -76,20 +77,39 @@ ROOM_FLAVORS = (
 )
 
 # Homebrew statistics: (name, HP, AC, attack bonus, damage dice, damage bonus, XP, gold).
-ENEMY_TEMPLATES = (
-    ("Crypt Rat", 5, 11, 2, (1, 4), 1, 50, 4),
-    ("Bone Sentry", 8, 13, 3, (1, 6), 1, 50, 6),
-    ("Grave Marauder", 9, 12, 3, (1, 6), 1, 50, 7),
-    ("Hollow Acolyte", 7, 11, 2, (1, 4), 1, 50, 8),
-    ("Restless Knight", 10, 13, 3, (1, 6), 1, 100, 9),
-    ("Catacomb Stalker", 11, 12, 3, (1, 6), 1, 100, 10),
+ENEMY_TEMPLATES = tuple(
+    (spec.name, spec.hp, spec.armor_class, spec.attack_bonus, spec.damage_dice,
+     spec.damage_bonus, spec.xp_reward, spec.gold_reward)
+    for spec in floor_roster(1)
 )
 
 
-def make_enemy(rng: random.Random) -> Enemy:
-    """Choose a template and create fresh combat state."""
-    name, hp, ac, attack_bonus, damage_dice, damage_bonus, xp, gold = rng.choice(ENEMY_TEMPLATES)
-    return Enemy(name, hp, hp, ac, attack_bonus, damage_dice, damage_bonus, xp, gold)
+def _instantiate_enemy(spec: MonsterSpec) -> Enemy:
+    """Give a catalog entry independent, unscaled combat state."""
+    return Enemy(
+        name=spec.name,
+        max_hp=spec.hp,
+        hp=spec.hp,
+        armor_class=spec.armor_class,
+        attack_bonus=spec.attack_bonus,
+        damage_dice=spec.damage_dice,
+        damage_bonus=spec.damage_bonus,
+        xp_reward=spec.xp_reward,
+        gold_reward=spec.gold_reward,
+        initiative_bonus=spec.initiative_bonus,
+    )
+
+
+def make_enemy(rng: random.Random, floor: int = 1) -> Enemy:
+    """Choose a foe native to this floor and create fresh combat state."""
+    return _instantiate_enemy(rng.choice(floor_roster(floor)))
+
+
+def make_floor_enemies(rng: random.Random, floor: int) -> list[Enemy]:
+    """Place each native species once, in a seedable shuffled order."""
+    roster = list(floor_roster(floor))
+    rng.shuffle(roster)
+    return [_instantiate_enemy(spec) for spec in roster]
 
 
 def make_warden() -> Enemy:

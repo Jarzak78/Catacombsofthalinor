@@ -170,8 +170,9 @@ foe follows the opening-encounter rules below.
   if the monster goes first, that failed check gives its opening attack
   Advantage without a second Perception roll. Safe rooms and rooms with
   defeated foes require no check.
-- Initiative is `d20 + Dexterity modifier` when normal initiative is
-  needed. The adventurer wins ties as this game's chosen DM ruling.
+- When normal initiative is needed, the adventurer rolls
+  `d20 + Dexterity modifier`; a monster rolls `d20 + its initiative bonus`.
+  The adventurer wins ties as this game's chosen DM ruling.
 - Spotting a new foe unnoticed or winning initiative gives you a free
   `examine` before your first action
   or the end of your opening turn. A bonus action or Action Surge does
@@ -344,7 +345,9 @@ Tk screens, and `ui_controller.py` manages character creation and commands.
 `game.py` handles commands and turns; `combat.py` resolves dice;
 `player.py` tracks character resources;
 `character_creation.py` rolls and accepts starting abilities;
-`dungeon.py` generates the map; the room and loot libraries define content.
+`dungeon.py` generates the map; `monster_catalog.py` defines each floor's
+ordinary foes, combat statistics, descriptions, and attack narration.
+The room and loot libraries define the remaining content.
 Pass an explicit seed to reproduce gameplay failures.
 
 ## Build the Windows executable
@@ -361,6 +364,9 @@ allows **Run workflow** on the Actions page, selecting the game branch.
 Each build runs the test suite, checks the packaged desktop's screens,
 character creation, commands, and minimap, and plays a complete adventure
 through the terminal executable from outside the checkout before uploading them.
+Warrior, Rogue, and Wizard replays each encounter all thirty ordinary monster
+types and all five guardians, checking that the packaged game includes every
+floor's roster.
 
 To build on your own Windows computer, install **64-bit Python 3.12**, open
 a terminal in the source folder, and run:
@@ -387,6 +393,27 @@ The campaign descends through the Forgotten Catacombs, Rootbound Depths,
 Ashen Forge, Starless Vault, and Thalinor's Heart. Each floor has a fresh
 12-room connected map. Enemy HP, Armor Class, attack bonuses, damage, gold,
 and XP increase with depth; the guardians culminate in the Hollow King.
+
+Each floor has six distinct ordinary monsters suited to its chapter of
+the dungeon's story. Every generated floor places one of each species;
+their rooms and encounter order change with the seed. Ordinary species do
+not repeat on deeper floors. Each floor also has its own guardian, giving
+the campaign thirty ordinary monster types and five guardians.
+
+| Floor | Ordinary monsters |
+| --- | --- |
+| Forgotten Catacombs | Crypt Rat, Bone Sentry, Grave Marauder, Hollow Acolyte, Restless Knight, Catacomb Stalker |
+| Rootbound Depths | Sapglass Beetle, Thorn Creeper, Spore Husk, Amber Mantis, Rootcoil Viper, Moldbound Keeper |
+| Ashen Forge | Bellows Automaton, Slag Crawler, Cinder Imp, Hollow Smith, Chainwork Harrier, Crucible Scuttler |
+| Starless Vault | Oathbound Echo, Silverchain Watcher, Shadow Jailer, Mirror Shardling, Nameless Witness, Starless Leech |
+| Thalinor's Heart | Blackwater Courtier, Crown Wisp, Heartless Usher, Choir Fragment, Sacrifice Revenant, Throne Hunger |
+
+Monster types vary in health, armor, damage dice, and initiative bonus.
+`examine` describes their origins, defenses, and tactical weaknesses;
+hits, near misses, and critical failures use creature-specific narration.
+Each foe makes one attack on its turn using the shared combat rules above.
+Monster attacks deal their listed damage without additional elemental or
+status effects; descriptions of spores, fire, and shadows supply atmosphere.
 
 Defeating a guardian clears its floor rather than ending the game. Stand in
 its chamber and type `portal` to teleport to Mira's sanctuary. A safe night's

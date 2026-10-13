@@ -11,7 +11,7 @@ from loot_library import (
     suitable_weapon_name, valuable,
 )
 from room import Room
-from room_library import make_enemy, make_warden
+from room_library import make_floor_enemies, make_warden
 
 
 DIRECTION_OFFSETS = {
@@ -152,8 +152,10 @@ class Dungeon:
         rng.shuffle(treasures)
         for position, treasure in zip(positions[:3], treasures):
             self.rooms[position].loot = Loot(gold=treasure.gold * self.floor, potions=treasure.potions)
-        for position in positions[3:]:
-            self.rooms[position].enemy = make_enemy(rng)
+        # Every floor has six native species, each encountered exactly once.
+        # Shuffle their placement while keeping repeated upper-floor foes out.
+        for position, enemy in zip(positions[3:], make_floor_enemies(rng, self.floor)):
+            self.rooms[position].enemy = enemy
         self.rooms[self.boss_position].enemy = make_warden()
         # Generate extras only after the original placement and monster rolls.
         # Loot variety therefore cannot alter this floor's layout or enemies.

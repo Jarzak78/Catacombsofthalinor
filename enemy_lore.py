@@ -1,6 +1,7 @@
 """Foe descriptions and detached combat details, independent of presentation."""
 
 from room import Enemy
+from monster_catalog import MONSTERS_BY_NAME
 
 
 # These descriptions add atmosphere to the existing single melee attack.
@@ -100,6 +101,11 @@ _CLASS_TACTICS = {
     ),
 }
 
+_FIGHTER_TACTICS = (
+    "A longsword hit applies Sap to its next attack. Dodge spends your "
+    "action to hinder its visible attacks until your next turn."
+)
+
 
 def foe_details(enemy: Enemy, class_id: str = "fighter") -> dict:
     """Return authored flavor and the foe's current, possibly scaled stats.
@@ -112,9 +118,18 @@ def foe_details(enemy: Enemy, class_id: str = "fighter") -> dict:
     """
     if class_id not in ("fighter", "rogue", "wizard"):
         raise ValueError("Choose fighter, rogue, or wizard for foe advice.")
-    description, tactics = _PROFILES.get(enemy.name, _UNKNOWN_PROFILE)
-    if class_id in _CLASS_TACTICS:
-        tactics = _CLASS_TACTICS[class_id]
+    profile = _PROFILES.get(enemy.name)
+    spec = MONSTERS_BY_NAME.get(enemy.name)
+    if profile is None and spec is not None:
+        # Keep each new creature's own clues alongside the player's abilities.
+        # Catalog advice is class-neutral; it grants no extra enemy mechanics.
+        description = spec.description
+        class_tactics = _CLASS_TACTICS.get(class_id, _FIGHTER_TACTICS)
+        tactics = f"{spec.tactics} {class_tactics}"
+    else:
+        description, tactics = profile or _UNKNOWN_PROFILE
+        if class_id in _CLASS_TACTICS:
+            tactics = _CLASS_TACTICS[class_id]
     return {
         "name": enemy.name,
         "description": description,

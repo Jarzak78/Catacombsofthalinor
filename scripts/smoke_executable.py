@@ -12,6 +12,20 @@ sys.path.insert(0, str(ROOT))
 
 from tests.test_game import complete_adventure
 from tests.test_class_campaigns import complete_class_adventure
+from campaign import FLOORS
+from monster_catalog import floor_roster
+
+
+def check_monster_rosters(text: str) -> None:
+    """Every complete campaign must encounter each floor's native foes."""
+    ordinary_foes = tuple(spec.name for floor in range(1, len(FLOORS) + 1)
+                         for spec in floor_roster(floor))
+    guardians = tuple(floor.guardian for floor in FLOORS)
+    if len(ordinary_foes) != 30 or len(set(ordinary_foes)) != 30 or len(guardians) != 5:
+        raise RuntimeError("The campaign must contain thirty unique floor monsters and five guardians.")
+    missing = [name for name in (*ordinary_foes, *guardians) if name not in text]
+    if missing:
+        raise RuntimeError("The complete adventure omitted monsters: " + ", ".join(missing))
 
 
 def check_character_rolls(text: str, expected_blocks: int) -> None:
@@ -52,6 +66,7 @@ def main() -> int:
     if not game.won:
         raise RuntimeError("The reference adventure did not reach victory.")
     encounter_text = "\n".join(transcript)
+    check_monster_rosters(encounter_text)
     if "Examining " not in encounter_text or "Perception check:" not in encounter_text:
         raise RuntimeError("The reference adventure did not exercise examination and room scouting.")
     scenarios = [
@@ -80,6 +95,7 @@ def main() -> int:
             raise RuntimeError(f"The reference {class_id} did not win all five floors and collect twenty notes.")
         if attack_text not in "\n".join(class_transcript):
             raise RuntimeError(f"The reference {class_id} did not exercise its class attacks.")
+        check_monster_rosters("\n".join(class_transcript))
         class_evidence = ("Your first dungeon is conquered", "Floor 5/5",
                           f"You are a first-level {class_id.title()}", attack_text,
                           "Perception check:")
@@ -111,7 +127,11 @@ def main() -> int:
             if name == "full adventure" and ("Examining " not in result.stdout
                                              or "Perception check:" not in result.stdout):
                 raise RuntimeError("Executable adventure did not exercise examination and room scouting.")
-            print(f"PASS: {name}")
+            if name == "full adventure" or name.endswith(" full adventure"):
+                check_monster_rosters(result.stdout)
+                print(f"PASS: {name} (30 floor monsters and 5 guardians)")
+            else:
+                print(f"PASS: {name}")
     return 0
 
 
