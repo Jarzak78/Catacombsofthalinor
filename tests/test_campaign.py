@@ -5,11 +5,14 @@ import subprocess
 import sys
 import unittest
 from copy import deepcopy
+from math import ceil
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from actions import Action
+from campaign import sanctuary_dialogue, shop_items
 from dungeon import Dungeon
+from equipment import equipment_options, make_equipment
 from game import Game
 from tests.test_game import complete_adventure, ScriptedRandom
 
@@ -43,6 +46,96 @@ class CampaignTests(unittest.TestCase):
         for command in ('north', 'loot', 'attack', 'rest', 'long rest', 'ember'):
             game.handle_command(command)
         self.assertEqual(game.get_state(), original)
+
+    def test_sanctuary_arrival_introduces_mira_and_shows_a_compact_menu(self):
+        game = self.shop_game()
+        lines = game.handle_command('look')
+        self.assertEqual(lines[0], 'Mira: ' + sanctuary_dialogue(1))
+        self.assertLessEqual(len(lines), 10)
+        for number in range(1, 7):
+            self.assertTrue(any(line.startswith(str(number) + '.') for line in lines))
+        self.assertFalse(any('Longsword +1' in line for line in lines))
+        self.assertEqual(game.handle_command('shop'), game.handle_command('menu'))
+        self.assertEqual(game.handle_command('1'), game.handle_command('shop weapons'))
+        self.assertEqual(game.handle_command('2'), game.handle_command('shop armor'))
+        self.assertEqual(game.handle_command('3'), game.handle_command('shop supplies'))
+        self.assertEqual(game.handle_command('4'), game.handle_command('inventory'))
+
+    def test_each_shop_page_has_compact_rows_and_all_items_remain_reachable(self):
+        game = self.shop_game()
+        state, rng_state = game.get_state(), game.rng.getstate()
+        for category in ('weapons', 'boots', 'gloves', 'pants', 'torso', 'helmet', 'supplies'):
+            with self.subTest(category=category):
+                offers = shop_items(game.floor, game.player.class_id, category)
+                rows = []
+                for page in range(1, ceil(len(offers) / 8) + 1):
+                    lines = game.handle_command(f'shop {category} {page}')
+                    page_rows = [line for line in lines
+                                 if any(line.startswith(item.id + ':') for item in offers)]
+                    self.assertLessEqual(len(page_rows), 8)
+                    rows.extend(page_rows)
+                    self.assertTrue(all(item.description not in '\n'.join(lines)
+                                        for item in offers))
+                self.assertEqual({line.split(':', 1)[0] for line in rows},
+                                 {item.id for item in offers})
+                self.assertEqual(len(rows), len(offers))
+        self.assertEqual(game.get_state(), state)
+        self.assertEqual(game.rng.getstate(), rng_state)
+
+    def test_shop_examination_by_id_and_name_is_free_and_has_full_mechanics(self):
+        game = self.shop_game()
+        state, rng_state = game.get_state(), game.rng.getstate()
+        self.assertEqual(game.handle_command('examine'),
+                         ["Use 'examine <item id or name>'."])
+        by_id = game.handle_command('examine greatsword_1')
+        self.assertEqual(by_id, game.handle_command('examine Greatsword +1'))
+        self.assertIn('2d6', '\n'.join(by_id))
+        self.assertIn('cannot use a shield', '\n'.join(by_id))
+        self.assertIn('Price: 70 gold | buy greatsword_1', by_id)
+        self.assertEqual(game.get_state(), state)
+        self.assertEqual(game.rng.getstate(), rng_state)
+
+    def test_inventory_pages_list_owned_gear_without_its_descriptions(self):
+        game = Game(seed=7)
+        for spec in equipment_options('fighter', 'weapon'):
+            game.player.collect_equipment(make_equipment(spec.id, 1), auto_equip=False)
+        owned = {item.id: item for item in game.player.equipment_inventory}
+        state, rng_state = game.get_state(), game.rng.getstate()
+        rows = []
+        for page in range(1, ceil(len(owned) / 8) + 1):
+            lines = game.handle_command(f'inventory {page}')
+            page_rows = [line for line in lines
+                         if any(line.startswith(item_id + ':') for item_id in owned)]
+            self.assertLessEqual(len(page_rows), 8)
+            rows.extend(page_rows)
+            self.assertTrue(all(item.description not in '\n'.join(lines)
+                                for item in owned.values()))
+        self.assertEqual({line.split(':', 1)[0] for line in rows}, set(owned))
+        self.assertEqual(len(rows), len(owned))
+        detail = game.handle_command('examine longsword_1')
+        self.assertIn('Description: ' + owned['longsword_1'].description, detail)
+        self.assertEqual(game.get_state(), state)
+        self.assertEqual(game.rng.getstate(), rng_state)
+
+    def test_item_examination_cannot_reveal_unowned_shop_gear_in_dungeon(self):
+        game = Game(seed=7)
+        state, rng_state = game.get_state(), game.rng.getstate()
+        lines = game.handle_command('examine greatsword_1')
+        self.assertIn('not in your pack', '\n'.join(lines))
+        self.assertNotIn('2d6', '\n'.join(lines))
+        self.assertEqual(game.get_state(), state)
+        self.assertEqual(game.rng.getstate(), rng_state)
+
+    def test_invalid_shop_categories_and_page_numbers_change_no_state(self):
+        game = self.shop_game()
+        state, rng_state = game.get_state(), game.rng.getstate()
+        for command in ('shop weapons 0', 'shop weapons 999', 'shop weapons bad',
+                        'shop weapons 1 extra', 'shop unknown', 'inventory 0',
+                        'inventory 999', 'inventory bad', 'examine nonexistent'):
+            with self.subTest(command=command):
+                self.assertTrue(game.handle_command(command))
+                self.assertEqual(game.get_state(), state)
+                self.assertEqual(game.rng.getstate(), rng_state)
 
     def test_portal_rest_restores_spent_resources(self):
         game = Game(seed=7)

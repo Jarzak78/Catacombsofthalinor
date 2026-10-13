@@ -195,7 +195,7 @@ class ScoutingTests(unittest.TestCase):
                 self.assertEqual(game.rng.calls, [(1, 20, 12)])
 
     def test_free_examination_preserves_the_rogues_preparatory_hide(self):
-        game, direction, _ = entry_game(values=[12, 10])
+        game, direction, _ = entry_game(values=[12, 13])
         game.handle_command(direction)
         game.handle_command("examine")
         self.assertTrue(game.foe_examined)
@@ -210,7 +210,7 @@ class ScoutingTests(unittest.TestCase):
         self.assertEqual(game.actions_remaining, 1)
 
     def test_valid_bonus_actions_preserve_the_preparatory_hide(self):
-        game, direction, _ = entry_game(values=[12, 1, 1, 10])
+        game, direction, _ = entry_game(values=[12, 1, 1, 13])
         game.player.hp = 1
         game.handle_command(direction)
         game.handle_command("potion")
@@ -222,7 +222,7 @@ class ScoutingTests(unittest.TestCase):
         self.assertEqual(game.actions_remaining, 1)
         self.assertFalse(game.bonus_action_available)
         self.assertEqual(game.rng.calls,
-                         [(1, 20, 12), (1, 4, 1), (1, 4, 1), (1, 20, 10)])
+                         [(1, 20, 12), (1, 4, 1), (1, 4, 1), (1, 20, 13)])
 
     def test_wizard_shield_preserves_the_unnoticed_opening_until_a_main_spell(self):
         game, direction, _ = entry_game("wizard", [12, 15, 4])
@@ -304,7 +304,7 @@ class PreparatoryHideTests(unittest.TestCase):
     def test_first_hide_is_free_at_every_rogue_level_and_preserves_the_opening(self):
         for level in (1, 2, 5):
             with self.subTest(level=level):
-                game, direction, _ = entry_game(values=[12, 10], level=level)
+                game, direction, _ = entry_game(values=[12, 13], level=level)
                 game.handle_command(direction)
                 hp = game.player.hp
                 output = game.handle_command("hide")
@@ -317,28 +317,28 @@ class PreparatoryHideTests(unittest.TestCase):
                 self.assertEqual(game.player.hp, hp)
                 self.assertEqual(game.round_number, 1)
                 self.assertEqual(game.elapsed_minutes, 1)
-                self.assertIn("d20 [10]", "\n".join(output))
-                self.assertEqual(game.rng.calls, [(1, 20, 12), (1, 20, 10)])
+                self.assertIn("d20 [13]", "\n".join(output))
+                self.assertEqual(game.rng.calls, [(1, 20, 12), (1, 20, 13)])
                 before = game.get_state()
                 game.handle_command("hide")
                 self.assertEqual(game.get_state(), before)
                 self.assertEqual(len(game.rng.calls), 2)
 
-    def test_preparatory_hide_dc_increases_with_floor_depth(self):
-        for floor, die, success, extra in ((1, 6, True, []), (3, 7, False, [20, 1]),
-                                          (3, 8, True, []), (5, 10, True, [])):
-            with self.subTest(floor=floor, die=die):
-                game, direction, _ = entry_game(values=[12, die, *extra])
-                game.floor = floor
-                game.handle_command(direction)
-                output = game.handle_command("hide")
-                self.assertEqual(game.hidden, success)
-                self.assertEqual(game.enemy_unaware, success)
-                self.assertIn(f"DC {12 + floor}", "\n".join(output))
-                self.assertFalse(game.rng.values)
+    def test_preparatory_hide_uses_dc_twenty_on_every_floor(self):
+        for floor in range(1, 6):
+            for die, success, extra in ((12, False, [20, 1]), (13, True, [])):
+                with self.subTest(floor=floor, die=die):
+                    game, direction, _ = entry_game(values=[12, die, *extra])
+                    game.floor = floor
+                    game.handle_command(direction)
+                    output = game.handle_command("hide")
+                    self.assertEqual(game.hidden, success)
+                    self.assertEqual(game.enemy_unaware, success)
+                    self.assertIn("DC 20", "\n".join(output))
+                    self.assertFalse(game.rng.values)
 
     def test_hidden_attack_has_advantage_sneak_damage_and_only_one_action(self):
-        game, direction, _ = entry_game(values=[12, 10, 3, 15, 4, 5, 10])
+        game, direction, _ = entry_game(values=[12, 13, 3, 15, 4, 5, 10])
         game.handle_command(direction)
         game.handle_command("hide")
         hp = game.player.hp
@@ -355,7 +355,7 @@ class PreparatoryHideTests(unittest.TestCase):
         self.assertTrue(game.bonus_action_available)
         self.assertEqual(game.round_number, 1)
         self.assertEqual(game.rng.calls,
-                         [(1, 20, 12), (1, 20, 10), (1, 20, 3), (1, 20, 15),
+                         [(1, 20, 12), (1, 20, 13), (1, 20, 3), (1, 20, 15),
                           (1, 8, 4), (1, 6, 5)])
         game.handle_command("attack")
         self.assertEqual(game.enemy.hp, 88)
@@ -365,7 +365,7 @@ class PreparatoryHideTests(unittest.TestCase):
         self.assertFalse(game.rng.values)
 
     def test_hidden_critical_doubles_weapon_and_sneak_dice_only(self):
-        game, direction, _ = entry_game(values=[12, 10, 3, 20, 1, 2, 3, 4])
+        game, direction, _ = entry_game(values=[12, 13, 3, 20, 1, 2, 3, 4])
         game.handle_command(direction)
         game.handle_command("hide")
         output = game.handle_command("attack")
@@ -373,7 +373,7 @@ class PreparatoryHideTests(unittest.TestCase):
         self.assertIn("Critical hit!", "\n".join(output))
         self.assertIn("Sneak Attack", "\n".join(output))
         self.assertEqual(game.rng.calls,
-                         [(1, 20, 12), (1, 20, 10), (1, 20, 3), (1, 20, 20),
+                         [(1, 20, 12), (1, 20, 13), (1, 20, 3), (1, 20, 20),
                           (1, 8, 1), (1, 8, 2), (1, 6, 3), (1, 6, 4)])
 
     def test_low_dexterity_opening_critical_clamps_combined_damage_once(self):
@@ -406,7 +406,7 @@ class PreparatoryHideTests(unittest.TestCase):
         self.assertEqual(game.rng.calls, [(1, 20, 12), (1, 20, 15), (1, 8, 4)])
 
     def test_hidden_miss_still_reveals_the_rogue_without_sneak_damage_rolls(self):
-        game, direction, _ = entry_game(values=[12, 10, 2, 3])
+        game, direction, _ = entry_game(values=[12, 13, 2, 3])
         game.handle_command(direction)
         game.handle_command("hide")
         game.handle_command("attack")
@@ -415,10 +415,10 @@ class PreparatoryHideTests(unittest.TestCase):
         self.assertFalse(game.enemy_unaware)
         self.assertFalse(game.sneak_attack_used)
         self.assertEqual(game.actions_remaining, 0)
-        self.assertEqual(game.rng.calls, [(1, 20, 12), (1, 20, 10), (1, 20, 2), (1, 20, 3)])
+        self.assertEqual(game.rng.calls, [(1, 20, 12), (1, 20, 13), (1, 20, 2), (1, 20, 3)])
 
     def test_failed_preparatory_hide_rolls_initiative_without_a_second_ambush_save(self):
-        for hero_first, extra in ((True, [18, 2]), (False, [2, 20, 19, 2])):
+        for hero_first, extra in ((True, [18, 2]), (False, [2, 20, 2, 19, 2])):
             with self.subTest(hero_first=hero_first):
                 game, direction, _ = entry_game(values=[12, 1, *extra])
                 game.handle_command(direction)
@@ -437,14 +437,17 @@ class PreparatoryHideTests(unittest.TestCase):
                 self.assertEqual(game.round_number, 1)
                 self.assertEqual(game.player.hp, hp if hero_first else hp - 3)
                 self.assertIn("Initiative", "\n".join(output))
+                if not hero_first:
+                    self.assertIn("d20 [2/19]", "\n".join(output))
+                    self.assertIn("Advantage", "\n".join(output))
                 self.assertEqual(game.rng.calls[:2], [(1, 20, 12), (1, 20, 1)])
-                self.assertEqual(len(game.rng.calls), 4 if hero_first else 6)
+                self.assertEqual(len(game.rng.calls), 4 if hero_first else 7)
                 self.assertFalse(game.rng.values)
 
     def test_another_hide_after_failure_pays_normal_level_dependent_cost(self):
         for level in (1, 2):
             with self.subTest(level=level):
-                game, direction, _ = entry_game(values=[12, 1, 18, 2, 10], level=level)
+                game, direction, _ = entry_game(values=[12, 1, 18, 2, 13], level=level)
                 game.handle_command(direction)
                 game.handle_command("hide")
                 self.assertFalse(game.opening_hide_available)
@@ -480,7 +483,7 @@ class PreparatoryHideTests(unittest.TestCase):
         self.assertEqual(list(game.rng.values), [1, 1])
 
     def test_failed_hide_with_enemy_initiative_refreshes_bonus_after_foe_acts(self):
-        game, direction, _ = entry_game(values=[12, 1, 1, 1, 2, 20, 19, 2, 1, 1])
+        game, direction, _ = entry_game(values=[12, 1, 1, 1, 2, 20, 2, 19, 2, 1, 1])
         game.player.hp = 1
         game.handle_command(direction)
         game.handle_command("potion")
@@ -496,21 +499,21 @@ class PreparatoryHideTests(unittest.TestCase):
         self.assertFalse(game.bonus_action_available)
         self.assertEqual(game.rng.calls,
                          [(1, 20, 12), (1, 4, 1), (1, 4, 1), (1, 20, 1),
-                          (1, 20, 2), (1, 20, 20), (1, 20, 19), (1, 6, 2),
+                          (1, 20, 2), (1, 20, 20), (1, 20, 2), (1, 20, 19), (1, 6, 2),
                           (1, 4, 1), (1, 4, 1)])
         self.assertFalse(game.rng.values)
 
     def test_preparatory_hide_structured_action_matches_command(self):
-        reference, direction, _ = entry_game(values=[12, 10])
+        reference, direction, _ = entry_game(values=[12, 13])
         reference.handle_command(direction)
         expected = reference.handle_command("hide")
-        game, direction, _ = entry_game(values=[12, 10])
+        game, direction, _ = entry_game(values=[12, 13])
         game.handle_command(direction)
         self.assertEqual(game.perform(Action("hide")), expected)
         self.assertEqual(game.get_state(), reference.get_state())
 
     def test_opening_kill_clears_scouting_and_awards_rewards_only_once(self):
-        game, direction, _ = entry_game(values=[12, 10, 3, 15, 4, 5])
+        game, direction, _ = entry_game(values=[12, 13, 3, 15, 4, 5])
         game.handle_command(direction)
         enemy = game.enemy
         enemy.hp = 1
@@ -528,7 +531,7 @@ class PreparatoryHideTests(unittest.TestCase):
         self.assertFalse(game.rng.values)
 
     def test_failed_hide_can_be_lethal_before_any_hero_action(self):
-        game, direction, _ = entry_game(values=[12, 1, 2, 20, 19, 2])
+        game, direction, _ = entry_game(values=[12, 1, 2, 20, 2, 19, 2])
         game.player.hp = 3
         game.handle_command(direction)
         output = game.handle_command("hide")
@@ -542,7 +545,7 @@ class PreparatoryHideTests(unittest.TestCase):
         self.assertNotIn("Actions left", "\n".join(output))
         self.assertEqual(game.rng.calls,
                          [(1, 20, 12), (1, 20, 1), (1, 20, 2), (1, 20, 20),
-                          (1, 20, 19), (1, 6, 2)])
+                          (1, 20, 2), (1, 20, 19), (1, 6, 2)])
 
 
 if __name__ == "__main__":

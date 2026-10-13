@@ -8,6 +8,7 @@ import traceback
 
 from character_creation import CLASS_NAMES, CLASS_SUMMARIES
 from entrance_art import draw_entrance
+from presentation import TAG_COLORS, classify_message
 from ui_controller import DesktopSession, minimap_data
 
 
@@ -186,8 +187,8 @@ class DungeonWindow:
             insertbackground=GOLD, font=MONO, wrap="word", relief="flat", borderwidth=0,
             padx=14, pady=12, state="disabled", width=66, height=25)
         self.terminal.grid(row=0, column=0, sticky="nsew")
-        self.terminal.tag_configure("command", foreground=GOLD)
-        self.terminal.tag_configure("notice", foreground="#90b9d6")
+        for tag, color in TAG_COLORS.items():
+            self.terminal.tag_configure(tag, foreground=color)
         input_row = ttk.Frame(left)
         input_row.grid(row=1, column=0, sticky="ew", pady=(12, 0))
         input_row.columnconfigure(1, weight=1)
@@ -200,8 +201,10 @@ class DungeonWindow:
         self.command_entry.bind("<Down>", lambda _event: self.recall_command(1))
         self.send_button = ttk.Button(input_row, text="Send", command=self.send_command)
         self.send_button.grid(row=0, column=2, padx=(10, 0))
-        ttk.Label(left, text="Type a command and press Enter. 'help' lists commands; 'skills' explains your abilities.",
-                  style="Muted.TLabel", wraplength=760).grid(row=2, column=0, sticky="w", pady=(8, 0))
+        self.command_hint = ttk.Label(left,
+            text="Type a command and press Enter. 'help' lists commands; 'skills' explains your abilities.",
+            style="Muted.TLabel", wraplength=760)
+        self.command_hint.grid(row=2, column=0, sticky="w", pady=(8, 0))
         right = ttk.Frame(play)
         right.grid(row=0, column=1, sticky="nsew")
         ttk.Label(right, text="MINIMAP", style="Section.TLabel").pack(anchor="w")
@@ -213,15 +216,31 @@ class DungeonWindow:
         self.map_canvas.bind("<Configure>", lambda _event: self.draw_map())
         ttk.Label(right, text="@ You   ? Unexplored   E Foe\nB Guardian   $ Loot   N Note", font=("Consolas", 10),
                   style="Muted.TLabel").pack(anchor="w", pady=(6, 8))
-        ttk.Label(right, text="MOVE", style="Section.TLabel").pack(anchor="w")
-        movement = ttk.Frame(right)
-        movement.pack(fill="x", pady=(4, 8))
+        self.navigation_label = ttk.Label(right, text="MOVE", style="Section.TLabel")
+        self.navigation_label.pack(anchor="w")
+        navigation = ttk.Frame(right)
+        navigation.pack(fill="x", pady=(4, 8))
+        navigation.columnconfigure(0, weight=1)
+        self.movement_frame = ttk.Frame(navigation)
+        self.movement_frame.grid(row=0, column=0, sticky="ew")
         self.movement_buttons = {}
         for direction, row, col in (("north", 0, 1), ("west", 1, 0), ("east", 1, 2), ("south", 2, 1)):
-            button = ttk.Button(movement, text=direction.title(), width=6, style="Compact.TButton",
+            button = ttk.Button(self.movement_frame, text=direction.title(), width=6, style="Compact.TButton",
                                 command=lambda d=direction: self.send_command(d))
             button.grid(row=row, column=col, padx=1, pady=1)
             self.movement_buttons[direction] = button
+        self.sanctuary_frame = ttk.Frame(navigation)
+        self.sanctuary_frame.grid(row=0, column=0, sticky="ew")
+        self.sanctuary_buttons = {}
+        for index, (title, command) in enumerate((
+                ("Menu", "menu"), ("Weapons", "shop weapons"), ("Armor", "shop armor"),
+                ("Supplies", "shop supplies"), ("Inventory", "inventory"), ("Examine", "examine"),
+                ("Journal", "journal"), ("Look", "look"), ("Descend", "descend"))):
+            button = ttk.Button(self.sanctuary_frame, text=title, width=8, style="Compact.TButton",
+                                command=lambda c=command: self.send_command(c))
+            button.grid(row=index // 3, column=index % 3, padx=1, pady=1, sticky="ew")
+            self.sanctuary_buttons[command] = button
+        self.sanctuary_frame.grid_remove()
         ttk.Label(right, text="ACTIONS", style="Section.TLabel").pack(anchor="w")
         actions = ttk.Frame(right)
         actions.pack(fill="x", pady=(4, 6))
@@ -311,7 +330,10 @@ class DungeonWindow:
 
     def append_messages(self, lines: list[str], tag: str = "") -> None:
         self.terminal.configure(state="normal")
-        self.terminal.insert("end", "\n".join(lines) + "\n\n", tag)
+        for message in lines:
+            for line in message.split("\n"):
+                self.terminal.insert("end", line + "\n", tag or classify_message(line))
+        self.terminal.insert("end", "\n")
         self.terminal.configure(state="disabled")
         self.terminal.see("end")
 
@@ -344,6 +366,20 @@ class DungeonWindow:
         self.map_state = minimap_data(state)
         self.map_label.set(self.map_state["label"])
         self.draw_map()
+        if state["scene"] == "shop":
+            self.navigation_label.configure(text="SANCTUARY")
+            self.command_hint.configure(text="Choose a category. Type 'examine <item id>' for details, "
+                                        "'buy <item id>' to purchase, or 'descend' when ready.")
+            self.movement_frame.grid_remove()
+            self.sanctuary_frame.grid()
+        else:
+            self.navigation_label.configure(text="MOVE")
+            self.command_hint.configure(text="Type a command and press Enter. 'help' lists commands; "
+                                        "'skills' explains your abilities.")
+            self.sanctuary_frame.grid_remove()
+            self.movement_frame.grid()
+        for button in self.sanctuary_buttons.values():
+            button.configure(state="disabled" if state["over"] else "normal")
         ability = {"fighter": "Second Wind", "rogue": "Hide", "wizard": "Spells"}[p["class_id"]]
         if p["class_id"] == "rogue":
             encounter = state["encounter"]
@@ -435,6 +471,13 @@ def run_gui_smoke(report_path: Path, name: str = "Adventurer", seed: int | None 
         root.report_callback_exception = lambda kind, error, trace: errors.append(str(error))
         app = DungeonWindow(root, DesktopSession(name=name, seed=seed, floors=floors))
         root.update()
+
+        def assert_text_tag(text, tag):
+            index = app.terminal.search(text, "1.0", stopindex="end", exact=True)
+            assert index, f"The terminal did not display {text!r}."
+            assert tag in app.terminal.tag_names(index), f"Incorrect terminal color for {text!r}."
+            assert app.terminal.tag_cget(tag, "foreground") == TAG_COLORS[tag]
+
         assert app.screen == "title" and app.entrance_canvas.find_all()
         checks.append("title_screen")
         app.creation_button.invoke()
@@ -471,12 +514,15 @@ def run_gui_smoke(report_path: Path, name: str = "Adventurer", seed: int | None 
         root.update()
         assert app.screen == "dungeon" and app.session.game is not None
         assert "Forgotten Catacombs" in app.terminal.get("1.0", "end")
+        assert_text_tag(app.session.game.room.description, "room")
+        assert_text_tag(app.session.game.dungeon.lore.arrival, "room")
         checks.append("enter_dungeon")
         before = app.session.game.get_state()
         app.command_var.set("look")
         app.send_button.invoke()
         root.update()
         assert "> look" in app.terminal.get("1.0", "end") and app.session.game.get_state() == before
+        assert_text_tag("> look", "command")
         checks.append("command_submission")
         initial_map = app.map_state
         assert sum(node["marker"] == "?" for node in initial_map["nodes"]) == 11
@@ -487,7 +533,7 @@ def run_gui_smoke(report_path: Path, name: str = "Adventurer", seed: int | None 
         from room import Enemy
         class OpeningRolls:
             def __init__(self):
-                self.values = iter((12, 12, 15, 10, 4, 5))
+                self.values = iter((12, 20, 15, 10, 4, 5))
                 self.calls = []
             def randint(self, low, high):
                 self.calls.append((low, high))
@@ -586,7 +632,16 @@ def run_gui_smoke(report_path: Path, name: str = "Adventurer", seed: int | None 
         assert "dagger_1: Dagger +1" in inventory_text
         assert "leather: Leather Armor" in inventory_text
         assert "rapier: Rapier" in inventory_text and "equipped" in inventory_text
+        assert dagger.description not in inventory_text and spare_armor.description not in inventory_text
         checks.append("equipment_inventory")
+
+        examine_text = submit_widget("examine dagger_1")
+        assert dagger.description in examine_text and "Description:" in examine_text
+        assert_text_tag("Description: " + dagger.description, "item")
+        assert gear_game.rng.getstate() == gear_rng
+        assert (gear_game.elapsed_minutes, gear_game.actions_remaining,
+                gear_game.bonus_action_available) == gear_budget
+        checks.append("item_examination")
 
         equip_text = submit_widget("equip dagger_1")
         assert gear_game.player.equipped_weapon is dagger and "You equip Dagger +1" in equip_text
@@ -601,13 +656,39 @@ def run_gui_smoke(report_path: Path, name: str = "Adventurer", seed: int | None 
         gear_game.in_shop = True
         gear_game.player.gold = 100
         app.refresh_dungeon()
+        menu_text = submit_widget("menu")
+        assert "shop weapons" in menu_text and "shop armor" in menu_text and "shop supplies" in menu_text
+        assert "dagger_1:" not in menu_text and dagger.description not in menu_text
+        assert app.sanctuary_frame.winfo_ismapped() and not app.movement_frame.winfo_ismapped()
+        assert app.navigation_label.cget("text") == "SANCTUARY"
+        before_menu = terminal_text()
+        app.sanctuary_buttons["shop supplies"].invoke()
+        root.update()
+        supplies_text = terminal_text()[len(before_menu):]
+        assert "potion:" in supplies_text and "rapier_1:" not in supplies_text
+        assert_text_tag("potion:", "item")
+        before_mira = terminal_text()
+        app.sanctuary_buttons["look"].invoke()
+        root.update()
+        mira_text = terminal_text()[len(before_mira):]
+        dialogue = next(line for line in mira_text.splitlines() if line.startswith("Mira:"))
+        assert_text_tag(dialogue, "dialogue")
+        checks.append("sanctuary_menu")
+        checks.append("colored_messages")
+        before_examine = terminal_text()
+        app.sanctuary_buttons["examine"].invoke()
+        root.update()
+        assert "Use 'examine <item id or name>'." in terminal_text()[len(before_examine):]
         shop_text = submit_widget("shop weapons")
         assert "dagger_1: Dagger +1" in shop_text and "rapier_1: Rapier +1" in shop_text
         assert "studded_leather_1:" not in shop_text and "potion:" not in shop_text
+        assert dagger.description not in shop_text
         assert not app.map_state["visible"]
         submit_widget("buy rapier_1")
         held_weapon = gear_game.player.equipped_weapon
         held_armor = gear_game.player.equipped_armor
+        held_equipment = tuple(item for item in gear_game.player.equipment_inventory
+                               if gear_game.player.is_equipped(item))
         assert held_weapon.id == "rapier_1" and held_weapon.bonus <= 3
         gold_after_buy = gear_game.player.gold
         submit_widget("sell leather")
@@ -616,7 +697,8 @@ def run_gui_smoke(report_path: Path, name: str = "Adventurer", seed: int | None 
         submit_widget("sell all")
         assert gear_game.player.equipped_weapon is held_weapon
         assert gear_game.player.equipped_armor is held_armor
-        assert len(gear_game.player.equipment_inventory) == 2
+        assert len(gear_game.player.equipment_inventory) == len(held_equipment)
+        assert all(gear_game.player.is_equipped(item) for item in held_equipment)
         assert gear_game.rng.getstate() == gear_rng
         assert (gear_game.elapsed_minutes, gear_game.actions_remaining,
                 gear_game.bonus_action_available) == gear_budget

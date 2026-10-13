@@ -42,14 +42,14 @@ class HitDescriptionTests(unittest.TestCase):
         self.assertIn("devastating", text)
 
     def test_low_damage_critical_stays_glancing_and_has_critical_narration(self):
-        result = hit_result(3, roll=20, total=25, critical=True)
+        result = roll_attack(ScriptedRandom(20, 1, 1), 5, 12, (1, 6), 1)
         description = hit_description("You", "Crypt Rat", result)
         self.assertIn("glancing", description.lower())
         self.assertNotEqual(description, hit_description(
             "You", "Crypt Rat", hit_result(3, roll=20, total=25)))
         text = Game.attack_text("You", "Crypt Rat", result)
         self.assertIn("Critical hit!", text)
-        self.assertIn("for 3 damage", text)
+        self.assertIn("for 1d6 × 2 + 1 (3) damage", text)
         self.assertNotIn("devastating", text.lower())
 
     def test_zero_damage_hit_has_clear_no_damage_narration(self):
@@ -77,12 +77,14 @@ class HitDescriptionTests(unittest.TestCase):
                         self.assertIn("Near miss!", text)
 
     def test_attack_roll_damage_and_critical_marker_remain_visible(self):
-        result = AttackResult((12, 20), 20, 25, True, True, 16, 18)
+        result = roll_attack(
+            ScriptedRandom(12, 20, 5, 8), 5, 18, (1, 8), 3, advantage=True
+        )
         for attacker, defender in (("You", "Crypt Rat"), ("Crypt Rat", "you")):
             with self.subTest(attacker=attacker):
                 text = Game.attack_text(attacker, defender, result)
                 self.assertIn("d20 [12/20], total 25", text)
-                self.assertIn("for 16 damage", text)
+                self.assertIn("for 1d8 × 2 + 3 (16) damage", text)
                 self.assertIn("Critical hit!", text)
                 self.assertIn(hit_description(attacker, defender, result), text)
 
@@ -142,7 +144,7 @@ class SuccessfulHitIntegrationTests(unittest.TestCase):
         output = "\n".join(game.handle_command("attack"))
         self.assertIn("solid", output.lower())
         self.assertIn("d20 [15], total 20", output)
-        self.assertIn("for 9 damage", output)
+        self.assertIn("for 1d8 + 5 (9) damage", output)
         self.assertEqual(game.enemy.hp, 91)
         self.assertEqual(game.player.hp, 12)
         self.assertEqual(game.actions_remaining, 0)
@@ -158,7 +160,7 @@ class SuccessfulHitIntegrationTests(unittest.TestCase):
         output = "\n".join(game.handle_command("end"))
         self.assertIn("glancing", output.lower())
         self.assertIn("claw", output.lower())
-        self.assertIn("for 3 damage", output)
+        self.assertIn("for 1d6 + 1 (3) damage", output)
         self.assertEqual(game.player.hp, 9)
         self.assertEqual(game.enemy.hp, 100)
         self.assertEqual(game.round_number, 2)
@@ -174,8 +176,8 @@ class SuccessfulHitIntegrationTests(unittest.TestCase):
         self.assertIn("Extra Attack", output)
         self.assertIn("solid", output.lower())
         self.assertIn("heavy", output.lower())
-        self.assertIn("for 6 damage", output)
-        self.assertIn("for 13 damage", output)
+        self.assertIn("for 1d8 + 5 (6) damage", output)
+        self.assertIn("for 1d8 + 5 (13) damage", output)
         self.assertEqual(game.enemy.hp, 81)
         self.assertEqual(game.player.hp, hp)
         self.assertEqual(game.actions_remaining, 0)
@@ -187,7 +189,7 @@ class SuccessfulHitIntegrationTests(unittest.TestCase):
         enemy.hp = 1
         output = "\n".join(game.handle_command("attack"))
         self.assertIn("heavy", output.lower())
-        self.assertIn("for 13 damage", output)
+        self.assertIn("for 1d8 + 5 (13) damage", output)
         self.assertIsNone(game.enemy)
         self.assertEqual(enemy.hp, 0)
         self.assertEqual(game.player.xp, 50)
@@ -198,7 +200,7 @@ class SuccessfulHitIntegrationTests(unittest.TestCase):
         output = "\n".join(game.handle_command("end"))
         self.assertIn("Critical hit!", output)
         self.assertIn("glancing", output.lower())
-        self.assertIn("for 3 damage", output)
+        self.assertIn("for 1d6 × 2 + 1 (3) damage", output)
         self.assertEqual(game.player.hp, 9)
         self.assertEqual(game.rng.calls, [(1, 20), (1, 6), (1, 6)])
 

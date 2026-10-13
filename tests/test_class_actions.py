@@ -281,14 +281,14 @@ class RogueActionTests(ActionAssertions, unittest.TestCase):
     def test_first_level_hide_spends_action_and_second_level_spends_bonus(self):
         for level in (1, 2):
             with self.subTest(level=level):
-                game = class_game("rogue", [10], level=level)
+                game = class_game("rogue", [13], level=level)
                 game.free_examine_available = True
                 game.handle_command("hide")
                 self.assertTrue(game.hidden)
                 self.assertEqual(game.actions_remaining, 0 if level == 1 else 1)
                 self.assertEqual(game.bonus_action_available, level == 1)
                 self.assertEqual(game.free_examine_available, level >= 2)
-                self.assertEqual(game.rng.calls, [(1, 20, 10)])
+                self.assertEqual(game.rng.calls, [(1, 20, 13)])
 
     def test_hide_failure_spends_correct_resource_without_damage(self):
         for level in (1, 2):
@@ -301,11 +301,16 @@ class RogueActionTests(ActionAssertions, unittest.TestCase):
                 self.assertEqual(game.actions_remaining, 0 if level == 1 else 1)
                 self.assertEqual(game.bonus_action_available, level == 1)
 
-    def test_hide_uses_expertise_and_a_deeper_floor_is_harder(self):
-        game = class_game("rogue", [6])
-        game.floor = 3
-        game.handle_command("hide")  # 6 + Dex 3 + expertise 4 = 13 vs DC 15.
-        self.assertFalse(game.hidden)
+    def test_hide_uses_expertise_against_dc_twenty_on_every_floor(self):
+        for floor in range(1, 6):
+            for roll, success in ((12, False), (13, True)):
+                with self.subTest(floor=floor, roll=roll):
+                    game = class_game("rogue", [roll])
+                    game.floor = floor
+                    output = game.handle_command("hide")
+                    self.assertEqual(game.hidden, success)
+                    self.assertIn("DC 20", "\n".join(output))
+                    self.assertEqual(game.rng.calls, [(1, 20, roll)])
 
     def test_invalid_hide_does_not_roll_or_spend(self):
         for reason in ("no enemy", "spent action", "spent bonus", "already hidden"):
@@ -322,7 +327,7 @@ class RogueActionTests(ActionAssertions, unittest.TestCase):
                 self.assert_unchanged(game, "hide")
 
     def test_hidden_rogue_gets_advantage_and_sneak_attack_on_next_hit(self):
-        game = class_game("rogue", [10, 3, 15, 4, 5], level=2)
+        game = class_game("rogue", [13, 3, 15, 4, 5], level=2)
         game.handle_command("hide")
         game.handle_command("attack")
         self.assertEqual(game.enemy.hp, 88)  # Rapier 4 + Dex 3 + Sneak 5.
@@ -330,20 +335,24 @@ class RogueActionTests(ActionAssertions, unittest.TestCase):
         self.assertTrue(game.rogue_vex)
         self.assertTrue(game.sneak_attack_used)
         self.assertFalse(game.enemy_sapped)
-        self.assertEqual(game.rng.calls, [(1, 20, 10), (1, 20, 3), (1, 20, 15),
+        self.assertEqual(game.rng.calls, [(1, 20, 13), (1, 20, 3), (1, 20, 15),
                                           (1, 8, 4), (1, 6, 5)])
 
-    def test_rapier_vex_carries_to_next_turn_and_enables_sneak_attack(self):
-        game = class_game("rogue", [15, 4, 3, 15, 4, 5])
+    def test_rapier_vex_carries_to_next_turn_without_enabling_sneak_attack(self):
+        game = class_game("rogue", [15, 4, 3, 15, 4])
         game.handle_command("attack")
         self.assertEqual(game.enemy.hp, 93)
         self.assertTrue(game.rogue_vex)
         self.assertFalse(game.sneak_attack_used)
         game.begin_turn()
         game.handle_command("attack")
-        self.assertEqual(game.enemy.hp, 81)
-        self.assertTrue(game.sneak_attack_used)
+        self.assertEqual(game.enemy.hp, 86)
+        self.assertFalse(game.sneak_attack_used)
         self.assertFalse(game.enemy_sapped)
+        self.assertEqual(game.rng.calls,
+                         [(1, 20, 15), (1, 8, 4), (1, 20, 3),
+                          (1, 20, 15), (1, 8, 4)])
+        self.assertFalse(game.rng.values)
 
     def test_sneak_attack_is_once_per_turn_even_if_additional_action_is_granted(self):
         game = class_game("rogue", [15, 14, 2, 4, 15, 14, 2], level=2)
@@ -375,7 +384,7 @@ class RogueActionTests(ActionAssertions, unittest.TestCase):
         # 1 weapon + 6 Sneak Attack - 4 Dexterity = 3; do not clamp the
         # weapon component before adding Sneak Attack.
         self.assertEqual(game.enemy.hp, 97)
-        self.assertIn("for 3 damage", output)
+        self.assertIn("1d8 + 1d6 - 4 (3) damage", output)
         self.assertTrue(game.sneak_attack_used)
         self.assertEqual(game.rng.calls, [(1, 20, 15), (1, 20, 10),
                                           (1, 8, 1), (1, 6, 6)])
@@ -388,7 +397,7 @@ class RogueActionTests(ActionAssertions, unittest.TestCase):
         output = "\n".join(game.handle_command("attack"))
         # Two weapon ones + two Sneak Attack ones - 4 Dexterity = 0.
         self.assertEqual(game.enemy.hp, 100)
-        self.assertIn("for 0 damage", output)
+        self.assertIn("1d8 × 2 + 1d6 × 2 - 4 (0) damage", output)
         self.assertIn("Critical", output)
         self.assertTrue(game.sneak_attack_used)
         self.assertEqual(game.rng.calls, [(1, 20, 20), (1, 20, 10),

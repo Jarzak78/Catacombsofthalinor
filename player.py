@@ -5,7 +5,7 @@ import random
 from typing import TYPE_CHECKING
 
 from equipment import (
-    DEFAULT_ARMOR, DEFAULT_WEAPONS, MAX_ENCHANTMENT,
+    ARMOR_SLOTS, DEFAULT_ARMOR, DEFAULT_ARMOR_PIECES, DEFAULT_WEAPONS, MAX_ENCHANTMENT,
     EquipmentItem, make_equipment, resolve_equipment_id,
 )
 
@@ -105,22 +105,33 @@ class Player:
         self.armor_id = self.armor_id or DEFAULT_ARMOR[self.class_id]
         weapon = make_equipment(self.weapon_id, self.weapon_bonus)
         armor = make_equipment(self.armor_id, self.armor_bonus)
-        if (weapon.kind != "weapon" or armor.kind != "armor"
+        if (weapon.kind != "weapon" or armor.kind != "armor" or armor.slot != "torso"
                 or not self.can_equip(weapon) or not self.can_equip(armor)):
             raise ValueError("Starting equipment must be usable by the chosen class.")
         self.equipment_inventory = list(self.equipment_inventory)
         if any(not isinstance(item, EquipmentItem) for item in self.equipment_inventory):
             raise ValueError("Equipment inventory must contain EquipmentItem objects.")
-        # Keep an actual owned object for each slot, so a duplicate remains
-        # sellable without accidentally selling the copy currently in use.
-        for item, attribute in ((weapon, "_equipped_weapon_item"),
-                                (armor, "_equipped_armor_item")):
+        # Each slot points at an actual owned copy. Equal duplicate items can
+        # then be sold independently without removing the piece in use.
+        self._equipped_armor_slots = {}
+        pieces = {slot: (armor if slot == "torso" else make_equipment(base_id))
+                  for slot, base_id in DEFAULT_ARMOR_PIECES[self.class_id].items()}
+        if (set(pieces) != set(ARMOR_SLOTS)
+                or any(item.kind != "armor" or item.slot != slot
+                       or not self.can_equip(item) for slot, item in pieces.items())):
+            raise ValueError("Starting armor must fill each compatible armor slot.")
+        for slot, item in (("weapon", weapon), *pieces.items()):
             owned = next((candidate for candidate in self.equipment_inventory
                           if candidate == item), None)
             if owned is None:
                 owned = item
                 self.equipment_inventory.append(owned)
-            setattr(self, attribute, owned)
+            if slot == "weapon":
+                self._equipped_weapon_item = owned
+            else:
+                self._equipped_armor_slots[slot] = owned
+                if slot == "torso":
+                    self._equipped_armor_item = owned
         if self.weapon_name == "Longsword" or not self.weapon_name:
             self.weapon_name = weapon.name
 
@@ -173,7 +184,7 @@ class Player:
         return self._weapon_ability_for(self.equipped_weapon)
 
     def _weapon_ability_for(self, item: EquipmentItem) -> str:
-        if item.spec.finesse and self.dexterity > self.strength:
+        if item.spec.finesse and self.effective_dexterity > self.effective_strength:
             return "dexterity"
         return "strength"
 
@@ -184,13 +195,68 @@ class Player:
 
     @property
     def equipped_armor(self) -> EquipmentItem:
-        """The owned item occupying the armor slot."""
+        """The torso piece, retained for callers using the original armor slot."""
         return self._equipped_armor_item
+
+    @property
+    def equipped_armor_slots(self) -> dict[str, EquipmentItem]:
+        """A detached mapping of the five slots to their actual owned pieces."""
+        return dict(self._equipped_armor_slots)
+
+    @staticmethod
+    def _buffs_for(armor_slots: dict[str, EquipmentItem],
+                   weapon: EquipmentItem) -> dict[str, int]:
+        """Identical magical effects use their strongest piece, never a sum."""
+        buffs = {}
+        for item in (weapon, *armor_slots.values()):
+            for effect, amount in item.buffs.items():
+                buffs[effect] = max(buffs.get(effect, 0), amount)
+        return buffs
+
+    @property
+    def equipment_buffs(self) -> dict[str, int]:
+        """Active effects; unequipped items have no mechanical effect."""
+        return self._buffs_for(self._equipped_armor_slots, self.equipped_weapon)
+
+    def _effective_score(self, ability: str, buffs: dict[str, int]) -> int:
+        score = getattr(self, ability)
+        # Constitution is deliberately excluded: equipment does not grant or
+        # remove HP, revive characters, or alter healing and level-up gains.
+        if ability == "constitution":
+            return score
+        return min(20, score + buffs.get(ability, 0))
+
+    @property
+    def effective_abilities(self) -> dict[str, int]:
+        """Rolled ability scores plus currently worn magic, capped at 20."""
+        buffs = self.equipment_buffs
+        return {ability: self._effective_score(ability, buffs)
+                for ability in ABILITY_NAMES}
+
+    @property
+    def effective_strength(self) -> int:
+        return self._effective_score("strength", self.equipment_buffs)
+
+    @property
+    def effective_dexterity(self) -> int:
+        return self._effective_score("dexterity", self.equipment_buffs)
+
+    @property
+    def effective_intelligence(self) -> int:
+        return self._effective_score("intelligence", self.equipment_buffs)
+
+    @property
+    def effective_wisdom(self) -> int:
+        return self._effective_score("wisdom", self.equipment_buffs)
+
+    @property
+    def effective_charisma(self) -> int:
+        return self._effective_score("charisma", self.equipment_buffs)
 
     @property
     def armor_name(self) -> str:
         """The armor's display name, including its current enchantment."""
-        return make_equipment(self.armor_id, self.armor_bonus).name
+        return self.equipped_armor.name
 
     @property
     def weapon_mastery(self) -> str:
@@ -203,21 +269,23 @@ class Player:
 
     @property
     def stealth_disadvantage(self) -> bool:
-        return self.equipped_armor.spec.stealth_disadvantage
+        return any(item.spec.stealth_disadvantage
+                   for item in self._equipped_armor_slots.values())
 
     @property
     def weapon_ability_modifier(self) -> int:
-        return ability_modifier(getattr(self, self.weapon_ability))
+        return ability_modifier(self._effective_score(self.weapon_ability,
+                                                     self.equipment_buffs))
 
     @property
     def strength_modifier(self) -> int:
         """Strength's modifier, used for longsword attacks and damage."""
-        return ability_modifier(self.strength)
+        return ability_modifier(self.effective_strength)
 
     @property
     def dexterity_modifier(self) -> int:
         """Dexterity's modifier, used for initiative."""
-        return ability_modifier(self.dexterity)
+        return ability_modifier(self.effective_dexterity)
 
     @property
     def constitution_modifier(self) -> int:
@@ -227,17 +295,17 @@ class Player:
     @property
     def intelligence_modifier(self) -> int:
         """Intelligence's ability-check modifier."""
-        return ability_modifier(self.intelligence)
+        return ability_modifier(self.effective_intelligence)
 
     @property
     def wisdom_modifier(self) -> int:
         """Wisdom's ability-check modifier."""
-        return ability_modifier(self.wisdom)
+        return ability_modifier(self.effective_wisdom)
 
     @property
     def charisma_modifier(self) -> int:
         """Charisma's ability-check modifier."""
-        return ability_modifier(self.charisma)
+        return ability_modifier(self.effective_charisma)
 
     @property
     def proficiency_bonus(self) -> int:
@@ -246,26 +314,54 @@ class Player:
 
     @property
     def armor_class(self) -> int:
-        """Armor, permitted Dexterity, a compatible shield, and enchantments."""
-        return self._armor_class_for(self.equipped_armor, self.equipped_weapon,
-                                     armor_bonus=self.armor_bonus)
+        """Torso protection, allowed Dexterity, shield, and ensemble magic."""
+        return self._loadout_armor_class(self._equipped_armor_slots,
+                                        self.equipped_weapon,
+                                        torso_bonus=self.armor_bonus)
+
+    @property
+    def combined_armor_bonus(self) -> int:
+        """The ensemble's AC enchantment; five pieces together cannot exceed +3."""
+        return self._loadout_enchantment(self._equipped_armor_slots,
+                                         self.armor_bonus)
+
+    @staticmethod
+    def _loadout_enchantment(armor_slots: dict[str, EquipmentItem],
+                             torso_bonus: int | None = None) -> int:
+        total = sum((torso_bonus if slot == "torso" and torso_bonus is not None
+                     else item.bonus) for slot, item in armor_slots.items())
+        return min(MAX_ENCHANTMENT, total)
 
     def _armor_class_for(self, armor: EquipmentItem, weapon: EquipmentItem,
                          armor_bonus: int | None = None,
                          mage_armor_active: bool | None = None) -> int:
-        spec = armor.spec
+        """Evaluate replacing one armor slot, without changing the character."""
+        armor_slots = dict(self._equipped_armor_slots)
+        armor_slots[armor.slot] = armor
+        torso_bonus = (armor_bonus if armor_bonus is not None else
+                       armor.bonus if armor.slot == "torso" else self.armor_bonus)
+        return self._loadout_armor_class(armor_slots, weapon, torso_bonus,
+                                        mage_armor_active)
+
+    def _loadout_armor_class(self, armor_slots: dict[str, EquipmentItem],
+                             weapon: EquipmentItem,
+                             torso_bonus: int | None = None,
+                             mage_armor_active: bool | None = None) -> int:
+        spec = armor_slots["torso"].spec
         base = spec.base_ac
         magical_armor = self.mage_armor_active if mage_armor_active is None else mage_armor_active
         if spec.unarmored and magical_armor:
             base = max(base, 13)
+        modifier = ability_modifier(self._effective_score(
+            "dexterity", self._buffs_for(armor_slots, weapon)))
         if spec.dex_cap == 0:
             dexterity = 0
         elif spec.dex_cap is None:
-            dexterity = self.dexterity_modifier
+            dexterity = modifier
         else:
-            dexterity = min(self.dexterity_modifier, spec.dex_cap)
+            dexterity = min(modifier, spec.dex_cap)
         shield = 2 if self.class_id == "fighter" and not weapon.spec.two_handed else 0
-        enchantment = armor.bonus if armor_bonus is None else armor_bonus
+        enchantment = self._loadout_enchantment(armor_slots, torso_bonus)
         return base + dexterity + shield + enchantment + self.ward_bonus
 
     @property
@@ -294,13 +390,13 @@ class Player:
     def perception_bonus(self) -> int:
         """Wisdom and rogue expertise for spotting foes and avoiding ambushes."""
         expertise = 2 * self.proficiency_bonus if self.class_id == "rogue" else 0
-        return self.wisdom_modifier + expertise
+        return self.wisdom_modifier + expertise + self.equipment_buffs.get("perception", 0)
 
     @property
     def stealth_bonus(self) -> int:
         """Dexterity and the rogue's expertise for hiding."""
         expertise = 2 * self.proficiency_bonus if self.class_id == "rogue" else 0
-        return self.dexterity_modifier + expertise
+        return self.dexterity_modifier + expertise + self.equipment_buffs.get("stealth", 0)
 
     @property
     def sneak_attack_dice_count(self) -> int:
@@ -531,12 +627,14 @@ class Player:
     def can_equip(self, item: EquipmentItem) -> bool:
         """Whether the class is proficient with an equipment type."""
         return (isinstance(item, EquipmentItem)
-                and self.class_id in item.spec.classes)
+                and self.class_id in item.spec.classes
+                and (item.kind == "weapon" or
+                     (item.kind == "armor" and item.slot in ARMOR_SLOTS)))
 
     def is_equipped(self, item: EquipmentItem) -> bool:
         """Protect the actual equipped copy while permitting duplicate sales."""
         return (item is self._equipped_weapon_item
-                or item is self._equipped_armor_item)
+                or any(item is worn for worn in self._equipped_armor_slots.values()))
 
     def sellable_equipment(self) -> list[EquipmentItem]:
         """A detached list of owned equipment that is not currently in use."""
@@ -559,17 +657,25 @@ class Player:
             self.weapon_name = item.name
             self.weapon_bonus = item.bonus
         else:
-            if item == self.equipped_armor:
+            if item == self._equipped_armor_slots[item.slot]:
                 return False
-            self._equipped_armor_item = item
-            self.armor_id = item.base_id
-            self.armor_bonus = item.bonus
+            self._equipped_armor_slots[item.slot] = item
+            if item.slot == "torso":
+                self._equipped_armor_item = item
+                self.armor_id = item.base_id
+                self.armor_bonus = item.bonus
         return True
 
     def _weapon_scores(self, item: EquipmentItem,
-                       bonus: int | None = None) -> tuple[float, int]:
+                       bonus: int | None = None,
+                       armor_slots: dict[str, EquipmentItem] | None = None) -> tuple[float, int]:
         """Expected physical damage and attack bonus for safe auto-equipping."""
-        ability = ability_modifier(getattr(self, self._weapon_ability_for(item)))
+        slots = self._equipped_armor_slots if armor_slots is None else armor_slots
+        buffs = self._buffs_for(slots, item)
+        strength = self._effective_score("strength", buffs)
+        dexterity = self._effective_score("dexterity", buffs)
+        ability = ability_modifier(max(strength, dexterity)
+                                   if item.spec.finesse else strength)
         dice_count, dice_sides = item.spec.damage_dice
         enchantment = item.bonus if bonus is None else bonus
         dueling = 2 if self.class_id == "fighter" and not item.spec.two_handed else 0
@@ -577,42 +683,69 @@ class Player:
         accuracy = ability + self.proficiency_bonus + enchantment
         return damage, accuracy
 
+    def _loadout_scores(self, armor_slots: dict[str, EquipmentItem],
+                         weapon: EquipmentItem, weapon_bonus: int,
+                         torso_bonus: int) -> dict[str, float]:
+        """Actual defense, attacks, and checks used to compare a complete outfit."""
+        buffs = self._buffs_for(armor_slots, weapon)
+        damage, accuracy = self._weapon_scores(weapon, weapon_bonus, armor_slots)
+        dexterity = ability_modifier(self._effective_score("dexterity", buffs))
+        wisdom = ability_modifier(self._effective_score("wisdom", buffs))
+        intelligence = ability_modifier(self._effective_score("intelligence", buffs))
+        expertise = 2 * self.proficiency_bonus if self.class_id == "rogue" else 0
+        scores = {
+            "damage": damage, "accuracy": accuracy,
+            "initiative": dexterity,
+            "perception": wisdom + expertise + buffs.get("perception", 0),
+            "stealth": dexterity + expertise + buffs.get("stealth", 0),
+        }
+        for ability in ABILITY_NAMES:
+            scores[ability] = self._effective_score(ability, buffs)
+        if self.class_id == "wizard":
+            scores["spell_attack"] = (intelligence + self.proficiency_bonus
+                                      + (weapon_bonus if weapon.spec.focus else 0))
+        modes = (False, True) if self.class_id == "wizard" else (None,)
+        for mode in modes:
+            scores[f"ac_{mode}"] = self._loadout_armor_class(
+                armor_slots, weapon, torso_bonus, mode)
+        return scores
+
     def _is_clear_upgrade(self, item: EquipmentItem) -> bool:
         """Choose automatic upgrades without making equipment tradeoffs."""
         if not self.can_equip(item):
             return False
+        slots = dict(self._equipped_armor_slots)
+        weapon = self.equipped_weapon
+        torso_bonus = self.armor_bonus
+        weapon_bonus = self.weapon_bonus
         if item.kind == "armor":
-            if item.spec.stealth_disadvantage and not self.stealth_disadvantage:
+            slots[item.slot] = item
+            if item.slot == "torso":
+                torso_bonus = item.bonus
+        else:
+            weapon = item
+            weapon_bonus = item.bonus
+            current_mastery = self.equipped_weapon.spec.mastery
+            if current_mastery and item.spec.mastery != current_mastery:
                 return False
-            # Mage Armor can conceal weaker mundane protection. An automatic
-            # change must remain safe after resting, when the spell expires.
-            modes = (False, True) if self.class_id == "wizard" else (None,)
-            current = tuple(self._armor_class_for(
-                self.equipped_armor, self.equipped_weapon,
-                armor_bonus=self.armor_bonus, mage_armor_active=mode) for mode in modes)
-            candidate = tuple(self._armor_class_for(
-                item, self.equipped_weapon, mage_armor_active=mode) for mode in modes)
-            return (all(new >= old for new, old in zip(candidate, current))
-                    and any(new > old for new, old in zip(candidate, current)))
-        if self._armor_class_for(self.equipped_armor, item,
-                                 armor_bonus=self.armor_bonus) < self.armor_class:
+            if (self.class_id == "wizard" and
+                    (item.bonus if item.spec.focus else 0) < self.focus_bonus):
+                return False
+        if (any(piece.spec.stealth_disadvantage for piece in slots.values())
+                and not self.stealth_disadvantage):
             return False
-        candidate_focus = item.bonus if item.spec.focus else 0
-        if self.class_id == "wizard" and candidate_focus < self.focus_bonus:
+        candidate_buffs = self._buffs_for(slots, weapon)
+        if any(candidate_buffs.get(effect, 0) < amount
+               for effect, amount in self.equipment_buffs.items()):
             return False
-        if item.base_id == self.weapon_id:
-            return item.bonus > self.weapon_bonus
-        current_mastery = self.equipped_weapon.spec.mastery
-        if current_mastery and item.spec.mastery != current_mastery:
-            return False
-        candidate_damage, candidate_accuracy = self._weapon_scores(item)
-        current_damage, current_accuracy = self._weapon_scores(
-            self.equipped_weapon, bonus=self.weapon_bonus)
-        dominates = (candidate_damage >= current_damage
-                     and candidate_accuracy >= current_accuracy)
-        improves = (candidate_damage > current_damage
-                    or candidate_accuracy > current_accuracy
-                    or (self.class_id == "wizard" and candidate_focus > self.focus_bonus))
+        current = self._loadout_scores(self._equipped_armor_slots,
+                                       self.equipped_weapon,
+                                       self.weapon_bonus, self.armor_bonus)
+        candidate = self._loadout_scores(slots, weapon, weapon_bonus, torso_bonus)
+        dominates = all(candidate[key] >= value for key, value in current.items())
+        improves = (any(candidate[key] > value for key, value in current.items())
+                    or (self.stealth_disadvantage and not any(
+                        piece.spec.stealth_disadvantage for piece in slots.values())))
         return dominates and improves
 
     def collect_equipment(self, item: EquipmentItem, auto_equip: bool = True) -> bool:

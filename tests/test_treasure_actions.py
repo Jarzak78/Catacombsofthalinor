@@ -163,6 +163,9 @@ class TreasureActionTests(unittest.TestCase):
                 game.player.collect_equipment(make_equipment("chain_mail", 3))
                 equipped_weapon = game.player._equipped_weapon_item
                 equipped_armor = game.player._equipped_armor_item
+                worn = game.player.equipped_armor_slots
+                previously_owned = tuple(game.player.equipment_inventory)
+                found_copies = game.room.loot.equipment
                 output = "\n".join(game.handle_command("loot"))
                 self.assertIn(f"Longsword +{bonus}", output)
                 self.assertIn(f"Chain Mail +{bonus}", output)
@@ -170,7 +173,19 @@ class TreasureActionTests(unittest.TestCase):
                 self.assertEqual((game.player.weapon_bonus, game.player.armor_bonus), (3, 3))
                 self.assertIs(game.player._equipped_weapon_item, equipped_weapon)
                 self.assertIs(game.player._equipped_armor_item, equipped_armor)
-                self.assertEqual(len(game.player.equipment_inventory), 6)
+                self.assertEqual(len(game.player.equipment_inventory), 10)
+                for item in (*previously_owned, *found_copies):
+                    self.assertTrue(any(item is owned for owned in game.player.equipment_inventory))
+                for slot, item in worn.items():
+                    self.assertIs(game.player.equipped_armor_slots[slot], item)
+                    self.assertTrue(game.player.is_equipped(item))
+                self.assertTrue(all(not game.player.is_equipped(item) for item in found_copies))
+                if bonus == 3:
+                    for equipped, found in zip((equipped_weapon, equipped_armor), found_copies):
+                        self.assertEqual(equipped, found)
+                        self.assertIsNot(equipped, found)
+                        self.assertEqual(sum(item.id == found.id
+                                             for item in game.player.equipment_inventory), 2)
                 self.assertTrue(game.room.looted)
                 self.assert_command_pure(game, "loot")
 
@@ -236,6 +251,11 @@ class TreasureActionTests(unittest.TestCase):
         self.assertIn("test_gem", output)
         self.assertIn("Secret emerald x2", output)
         self.assertIn("11 gold each", output)
+        self.assertNotIn(test_gem().description, output)
+        examined = "\n".join(game.handle_command("examine Secret emerald"))
+        self.assertIn(test_gem().description, examined)
+        self.assertIn("Sell value: 11 gold each", examined)
+        self.assert_command_pure(game, "examine test_gem")
 
 
 if __name__ == "__main__":

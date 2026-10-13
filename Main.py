@@ -8,6 +8,7 @@ import traceback
 
 from character_creation import canonical_class, select_character
 from game import Game
+from presentation import print_messages
 from title_screen import title_screen
 
 
@@ -35,10 +36,10 @@ def main() -> None:
                 return
             game = Game(name=name, seed=args.seed, floors=args.floors, player=player)
         # The title art supplies the heading; the engine supplies the story.
-        print("\n".join(game.introduction()[1:]))
+        print_messages(game.introduction()[1:])
         while not game.over:
             command = input("\n> ")
-            print("\n".join(game.handle_command(command)))
+            print_messages(game.handle_command(command))
     except (EOFError, KeyboardInterrupt):
         print("\nYou leave the trial for another day.")
 

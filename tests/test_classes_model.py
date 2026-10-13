@@ -2,7 +2,7 @@
 
 import unittest
 
-from equipment import make_equipment
+from equipment import ARMOR_SLOTS, DEFAULT_ARMOR_PIECES, make_equipment
 from player import ABILITY_NAMES, Player
 from tests.test_models import FixedRolls
 
@@ -32,6 +32,14 @@ class ClassModelTests(unittest.TestCase):
                                   player.attack_bonus, player.damage_bonus,
                                   player.weapon_dice), expected)
                 self.assertEqual(player.hp, player.max_hp)
+                self.assertEqual({slot: item.base_id for slot, item in player.equipped_armor_slots.items()},
+                                 DEFAULT_ARMOR_PIECES[class_id])
+                self.assertEqual(set(player.equipped_armor_slots), set(ARMOR_SLOTS))
+                self.assertEqual(len(player.equipment_inventory), 6)
+                self.assertTrue(all(player.is_equipped(item)
+                                    for item in player.equipment_inventory))
+                self.assertTrue(all(item.bonus == 0 and not item.buffs
+                                    for item in player.equipment_inventory))
 
     def test_warrior_alias_and_case_normalize_but_unknown_class_is_rejected(self):
         self.assertEqual(Player.create(class_id=" Warrior ").class_id, "fighter")

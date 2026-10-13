@@ -21,6 +21,12 @@ class AttackResult:
     damage: int
     armor_class: int = 0
     extra_damage: int = 0
+    damage_dice: tuple[int, int] | None = None
+    damage_bonus: int = 0
+    extra_damage_dice: tuple[int, int] | None = None
+    damage_rolls: tuple[int, ...] = ()
+    extra_damage_rolls: tuple[int, ...] = ()
+    raw_damage: int | None = None
 
     @property
     def critical_fail(self) -> bool:
@@ -44,11 +50,73 @@ def roll_dice(rng: random.Random, count: int, sides: int) -> int:
     A dice pool must contain at least one die, with at least two faces.
     Invalid pools raise ``ValueError`` before consuming random numbers.
     """
+    return sum(_roll_damage_dice(rng, count, sides))
+
+
+def _roll_damage_dice(rng: random.Random, count: int, sides: int) -> tuple[int, ...]:
+    """Keep each face while using the same dice order as ``roll_dice``."""
     if count < 1:
         raise ValueError("A dice pool must contain at least one die.")
     if sides < 2:
         raise ValueError("Dice must have at least two sides.")
-    return sum(rng.randint(1, sides) for _ in range(count))
+    return tuple(rng.randint(1, sides) for _ in range(count))
+
+
+def format_damage_pool(
+    dice: tuple[int, int],
+    bonus: int,
+    total: int,
+    *,
+    critical: bool = False,
+    extra_dice: tuple[int, int] | None = None,
+    original_total: int | None = None,
+) -> str:
+    """Describe the rolled dice pool followed by the actual damage total.
+
+    ``1d6 × 2`` denotes two independent d6 rolls on a critical hit, not
+    doubling a single roll. A flat modifier appears once, after all dice.
+    ``original_total`` allows a caller to show a saving throw or Uncanny
+    Dodge reduction without presenting the reduced number as a full roll.
+    The zero-damage floor remains visible through the resulting total.
+    This helper never rolls dice or changes an attack result.
+    """
+    def pool_text(pool: tuple[int, int]) -> str:
+        count, sides = pool
+        if count < 1 or sides < 2:
+            raise ValueError("Damage notation requires a valid dice pool.")
+        return f"{count}d{sides}" + (" × 2" if critical else "")
+
+    terms = [pool_text(dice)]
+    if extra_dice is not None:
+        terms.append(pool_text(extra_dice))
+    formula = " + ".join(terms)
+    if bonus > 0:
+        formula += f" + {bonus}"
+    elif bonus < 0:
+        formula += f" - {abs(bonus)}"
+
+    if original_total is not None and original_total != total:
+        reduction = "halved" if total == original_total // 2 else "reduced"
+        return f"{formula} ({original_total}; {reduction} to {total})"
+    return f"{formula} ({total})"
+
+
+def damage_notation(result: AttackResult) -> str:
+    """Format a resolved hit, retaining the original roll when reduced.
+
+    Misses never roll damage and display zero. Older caller-created
+    results without pool metadata retain their plain numeric output.
+    """
+    if not result.hit or result.damage_dice is None:
+        return str(result.damage)
+    return format_damage_pool(
+        result.damage_dice,
+        result.damage_bonus,
+        result.damage,
+        critical=result.critical,
+        extra_dice=result.extra_damage_dice,
+        original_total=result.raw_damage,
+    )
 
 
 def roll_attack(
@@ -88,16 +156,25 @@ def roll_attack(
     critical = hit and (roll == 20 or critical_on_hit)
     damage = 0
     extra_damage = 0
+    damage_rolls: tuple[int, ...] = ()
+    extra_damage_rolls: tuple[int, ...] = ()
     if hit:
         count, sides = damage_dice
         multiplier = 2 if critical else 1
-        rolled = roll_dice(rng, count * multiplier, sides)
+        damage_rolls = _roll_damage_dice(rng, count * multiplier, sides)
         if extra_damage_dice is not None:
             extra_count, extra_sides = extra_damage_dice
-            extra_damage = roll_dice(rng, extra_count * multiplier, extra_sides)
-        damage = max(0, rolled + extra_damage + damage_bonus)
+            extra_damage_rolls = _roll_damage_dice(
+                rng, extra_count * multiplier, extra_sides
+            )
+            extra_damage = sum(extra_damage_rolls)
+        damage = max(0, sum(damage_rolls) + extra_damage + damage_bonus)
 
-    return AttackResult(rolls, roll, total, hit, critical, damage, armor_class, extra_damage)
+    return AttackResult(
+        rolls, roll, total, hit, critical, damage, armor_class, extra_damage,
+        damage_dice, damage_bonus, extra_damage_dice, damage_rolls,
+        extra_damage_rolls, damage,
+    )
 
 
 def roll_initiative(rng: random.Random, bonus: int) -> int:

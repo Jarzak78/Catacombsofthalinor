@@ -3,7 +3,8 @@
 from dataclasses import dataclass
 
 from equipment import (
-    DEFAULT_ARMOR, DEFAULT_WEAPONS, EquipmentItem, equipment_options, make_equipment,
+    ARMOR_SLOTS, DEFAULT_ARMOR, DEFAULT_WEAPONS, EquipmentItem,
+    armor_affix_options, equipment_options, make_equipment,
 )
 
 
@@ -25,6 +26,10 @@ ENCHANTMENT_WEIGHTS = {
     4: {0: 25000, 1: 42000, 2: 28000, 3: 5000},
     5: {0: 15000, 1: 40000, 2: 35000, 3: 10000},
 }
+
+# Conditional on finding an enchanted armor piece; otherwise it has its normal
+# AC enchantment alone. The affix increases a score/check by the gear's +1..+3.
+ARMOR_AFFIX_CHANCES = {1: 0.20, 2: 0.30, 3: 0.40}
 
 
 def _validate_floor(floor: int) -> None:
@@ -180,8 +185,16 @@ def roll_equipment(rng, floor: int, class_id: str) -> EquipmentItem:
     _validate_floor(floor)
     _validate_class(class_id)
     kind = "weapon" if rng.random() < 0.5 else "armor"
-    spec = rng.choice(equipment_options(class_id, kind))
-    return make_equipment(spec.id, roll_enchantment(rng, floor))
+    options = equipment_options(class_id, kind)
+    if kind == "armor":
+        slot = rng.choice(ARMOR_SLOTS)
+        options = tuple(spec for spec in options if spec.slot == slot)
+    spec = rng.choice(options)
+    bonus = roll_enchantment(rng, floor)
+    affix = ""
+    if kind == "armor" and bonus and rng.random() < ARMOR_AFFIX_CHANCES[bonus]:
+        affix = rng.choice(armor_affix_options(class_id))
+    return make_equipment(spec.id, bonus, affix)
 
 
 def roll_room_loot(rng, floor: int, class_id: str, source: str = "cache") -> Loot:

@@ -102,6 +102,8 @@ class AttackFlavorTests(unittest.TestCase):
                 text = Game.attack_text(attacker, defender, fumble)
                 self.assertIn("Critical fail!", text)
                 self.assertIn("1 HP of self-damage", text)
+                self.assertNotIn("1d8", text)
+                self.assertNotIn("× 2", text)
 
 
 class CombatFumbleTests(unittest.TestCase):

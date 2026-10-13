@@ -86,11 +86,14 @@ _UNKNOWN_PROFILE = (
 _CLASS_TACTICS = {
     "rogue": (
         "If you spot a new room's foe unnoticed, your first opening Hide "
-        "attempt is free. "
+        "attempt is free. Hide checks use DC 20. "
         "A successful Hide check gives your next rapier attack Advantage. "
-        "A rapier hit applies Vex to your next attack against this foe. "
-        "Advantage allows Sneak Attack once per turn; a critical hit "
-        "doubles its extra damage dice."
+        "A finesse-weapon hit made while hidden allows Sneak Attack once per turn; "
+        "a critical hit doubles its extra damage dice. "
+        "A rapier hit applies Vex to your next attack against this foe, "
+        "but Vex alone does not allow Sneak Attack. "
+        "A failed opening Hide rolls initiative; if the foe acts first, "
+        "its opening attack has Advantage."
     ),
     "wizard": (
         "Prepare Mage Armor in a safe room. Shield costs a level-1 slot "
@@ -130,15 +133,19 @@ def _equipment_tactics(class_id: str, weapon_mastery: str) -> str:
     if class_id == "rogue":
         advice = (
             "If you spot a new room's foe unnoticed, your first opening Hide "
-            "attempt is free. A successful Hide check gives your next weapon "
-            "attack Advantage. Advantage on a finesse-weapon hit allows "
-            "Sneak Attack once per turn; a critical hit doubles its extra damage dice. "
+            "attempt is free. Hide checks use DC 20. A successful Hide check "
+            "gives your next weapon attack Advantage. "
+            "A finesse-weapon hit made while hidden allows Sneak Attack once per turn; "
+            "a critical hit doubles its extra damage dice. "
+            "A failed opening Hide rolls initiative; if the foe acts first, "
+            "its opening attack has Advantage. "
             "Armor that hinders stealth gives Hide checks Disadvantage."
         )
         if weapon_mastery == "vex":
             advice += (
                 " Your equipped weapon applies Vex on a hit, granting your next "
-                "attack against this foe Advantage."
+                "attack against this foe Advantage, but Vex alone does not "
+                "allow Sneak Attack."
             )
         return advice
     return (

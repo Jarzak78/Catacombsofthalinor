@@ -29,8 +29,10 @@ Dungeon**. The adventure screen keeps a scrolling text terminal on the
 left, with a minimap in the upper-right corner and your character's status
 across the top. Type commands and press Enter or click **Send**, or use the
 direction and common-action buttons. Your class button offers **Second
-Wind**, **Hide**, or a **Spells** menu. Use the command box for resting,
-portals, shopping, and other commands listed below; the Up and Down keys
+Wind**, **Hide**, or a **Spells** menu. Mira's sanctuary has category buttons
+for weapons, armor, supplies, inventory, selling, and continuing the adventure.
+Use the command box for resting, portals, item examination, and other commands
+listed below; the Up and Down keys
 recall earlier commands. At zero HP, your adventurer dies immediately and
 gameplay stops. When the adventure ends, its text remains visible and
 **New Adventure** lets you start another character.
@@ -121,23 +123,26 @@ Found equipment receives an exact name and bonus, and an explanation of
 whether it replaces your current gear. Clear improvements equip
 automatically; choices involving damage, shields, masteries, armor, or
 stealth stay in your pack for you to decide. Your previous equipment is
-retained. Use `inventory` to see stable item IDs and `equip <id or name>`
-to change gear in a safe room or at the vendor.
+retained. Use `inventory` to see compact, paged lists with stable item IDs,
+`examine <id or name>` for an item's full description and properties, and
+`equip <id or name>` to change gear in a safe room or at the vendor.
 
 ## Commands
 
 | Command | Effect |
 | --- | --- |
 | `north`, `south`, `east`, `west` | Move through a passage; `n/s/e/w` also work. |
-| `look`, `map`, `stats`, `inventory`, `skills` | Inspect surroundings, character, possessions, or class abilities. |
+| `look`, `map`, `stats`, `skills` | Inspect surroundings, character, or class abilities. |
+| `inventory`, `inventory <page>` | List carried items without descriptions, eight entries per page. |
 | `loot` | Collect treasure and lore documents once the room is safe. |
 | `equip <item id or name>` | Equip an owned weapon or armor in a safe room or at Mira's shop. |
 | `journal` | List your collected notes with journal numbers. |
 | `read`, `read 1`, `read <note id>` | Read the latest note, a numbered note, or a collected note by its id. |
 | `examine`, `inspect`, `examine foe` | Study your current foe's description, HP, AC, attacks, and tactical clues. |
+| `examine <item id or name>` | Read an owned item's description, properties, slot, rarity, and value; at Mira's shop, also examine stock. This is free. |
 | `attack` / `a` | Use an action for a weapon attack; Wizards use Fire Bolt instead. |
 | `strike` | Make one physical weapon strike, including a Wizard's staff; Warriors use `attack` for Extra Attack. |
-| `hide` | Rogue: try to hide for Advantage on your next attack; your first attempt is free after spotting a new room's foe unnoticed. |
+| `hide` | Rogue: attempt a DC 20 Stealth check; a hidden finesse-weapon hit can deliver Sneak Attack. Your first attempt is free after spotting a new room's foe unnoticed. |
 | `cast <spell>` | Wizard: cast `firebolt`, `missile`, `armor`, `shield`, `frost`, or `fireball`. |
 | `dodge` / `d` | Use an action to impose Disadvantage on enemy attacks until your next turn. |
 | `disengage` / `flee` / `f` | Use an action and movement to retreat without an opportunity attack; level-2+ Rogues use a bonus action. |
@@ -150,7 +155,10 @@ to change gear in a safe room or at the vendor.
 | `rest 0`, `rest 1`, `rest 2` | Limit the Hit Dice spent in that one-hour rest. |
 | `long rest` | Rest for eight hours at the entrance. |
 | `portal` | After defeating a guardian, enter its portal to the vendor. |
-| `shop`, `buy <item id or name>` | View vendor prices and purchase equipment or supplies. |
+| `menu`, `shop`, `1`–`6` | At Mira's sanctuary, open the six-choice menu or select an option. |
+| `shop weapons`, `shop armor`, `shop supplies` | Browse weapons or supplies, or choose an armor slot. |
+| `shop <category or armor slot> [page]` | List up to eight sale items with IDs, names, and prices; slots are `boots`, `gloves`, `pants`, `torso`, and `helmet`. |
+| `buy <item id or name>` | Purchase equipment or supplies at Mira's sanctuary. |
 | `sell <item id or name>`, `sell all` | At Mira's shop, sell valuables and unequipped equipment; equipped gear is protected. |
 | `descend` | Leave the vendor for the next floor; after the final floor, return home. |
 | `ember` | Consume an Ember stone and an action to deal 3d6 magic damage. |
@@ -160,8 +168,9 @@ Actions do **not** automatically end your turn. For example, you can
 `attack`, drink a `potion` as your bonus action, then `end`. A level-2 Warrior
 can `attack`, `surge`, `attack`, and `end`. You get only one bonus action
 per turn, so Second Wind and a potion cannot both be used on that turn.
-Other informational and invalid commands spend no actions. Examining a
-foe follows the opening-encounter rules below.
+Other informational and invalid commands spend no actions. Item examination
+spends no action, bonus action, time, or dice rolls, including during combat.
+Examining a foe follows the opening-encounter rules below.
 
 ## Shared combat rules
 
@@ -206,6 +215,12 @@ foe follows the opening-encounter rules below.
   having both cancels them.
 - Critical hits double damage dice, including eligible Sneak Attack dice,
   and add flat modifiers once. A critical hit can still roll low damage.
+  Combat text displays the dice formula before the damage total, for example
+  `1d6 × 2 + 2 (12)` for a critical hit dealing 12 damage. The multiplication
+  sign means rolling twice as many dice, not doubling one die's result.
+  Sneak Attack appears as its own dice pool in the same formula. Uncanny
+  Dodge and successful Fireball saves show the original roll and its halved
+  damage explicitly.
 - Successful player and monster attacks get descriptions based on the damage
   rolled: **glancing** (1–5), **solid** (6–10), **heavy** (11–15), or
   **devastating** (16+). Swords, claws, roots, iron fists, and the Hollow
@@ -260,22 +275,29 @@ after a successful hit.
 Vex also works with a shortsword; daggers and scimitars do not grant it.
 Armor marked as hindering stealth gives Disadvantage on Hide checks.
 
-Use **hide** to roll a Stealth check against `DC 12 + dungeon floor`. Success
+Use **hide** to roll a Stealth check against **DC 20** on every floor, including
+the free opening attempt. Success
 gives Advantage on your next attack and Disadvantage to enemy attacks until
 you reveal yourself by attacking. If your first-entry Perception check
 spots a foe unnoticed, you may attempt Hide **once for free** before your
 first action or ending your opening turn. This preserves both your action
 and bonus action. Success lets you attack from hiding; a failed opening
-Hide alerts the monster and immediately rolls normal initiative, without
-ambush Advantage because you already spotted it. A hidden attack spends
+Hide alerts the monster and immediately rolls normal initiative. If the
+monster wins, it makes one opening attack with Advantage, without another
+Perception check. If you win or tie, you act first; failing Hide does not
+refund an action or bonus action you already spent before detection. A hidden attack spends
 your normal attack action and reveals you even if it misses. Spotting a
 foe alone does not grant attack Advantage or Sneak Attack.
 
 Outside that opening opportunity, hiding costs an action at level 1;
 **Cunning Action** makes it a bonus action from level 2, and also lets you
-flee using a bonus action instead of an action. Hidden status ends when you
-attack. **Sneak Attack** adds `ceil(level / 2)d6` once per turn when an
-eligible finesse-weapon strike has Advantage; these dice double on a critical hit.
+flee using a bonus action instead of an action. A failed ordinary combat Hide
+spends its normal resource and leaves you visible; it does not reroll initiative.
+Hidden status ends when you attack, even on a miss.
+**Sneak Attack** adds `ceil(level / 2)d6` once per turn only when the Rogue
+was hidden immediately before a successful finesse-weapon strike. Vex or
+another source of Advantage alone does not qualify. These extra dice double
+on a critical hit.
 At level 5, **Uncanny Dodge** automatically halves damage from one enemy hit
 per turn while you are alive. The game applies it without a separate
 reaction command.
@@ -299,7 +321,7 @@ Spell save DC is `8 + Intelligence modifier + proficiency + Arcane Staff focus b
 Only an enchanted Arcane Staff adds a focus bonus. Protective wizard vestments
 are homebrew unarmored clothing: Robes have base AC 10, Warded Robes 11, and
 Battlemage Robes 12. Mage Armor raises that base to at least 13, then adds
-Dexterity and the garment's enchantment bonus.
+Dexterity and the combined armor enchantment bonus described below.
 This is a single-enemy dungeon; Fireball targets the current foe. Shield's bonus-action
 cost and Frost are simplified game abilities, rather than full tabletop
 spell implementations.
@@ -361,7 +383,9 @@ Tk screens, and `ui_controller.py` manages character creation and commands.
 `Main.py` owns terminal input;
 `game.py` handles commands and turns; `combat.py` resolves dice;
 `player.py` tracks character resources;
-`equipment.py` defines weapon and armor profiles, enchantments, and campaign prices;
+`equipment.py` defines weapon and five-slot armor profiles, enchantments,
+stat-buff affixes, and campaign prices;
+`presentation.py` supplies shared desktop tags and interactive terminal colors;
 `character_creation.py` rolls and accepts starting abilities;
 `dungeon.py` generates the map; `monster_catalog.py` defines each floor's
 ordinary foes, combat statistics, descriptions, and attack narration.
@@ -439,12 +463,30 @@ rest restores HP, Hit Dice, class resources, and Wizard spell slots once per
 visit, and ends Mage Armor. Potions, Ember stones, and Mana draughts are
 not replenished for free.
 
-Use `shop` to see stable purchase IDs, exact item names, prices, damage or
-armor profiles, and properties. Every vendor stocks all weapon and armor
+Mira introduces herself after the first guardian and offers different dialogue
+after each floor, commenting on your progress through its story. Arrival
+shows her dialogue and a compact six-choice sanctuary menu:
+
+1. Weapons.
+2. Armor, then boots, gloves, pants, torso, or helmet.
+3. Supplies.
+4. Inventory.
+5. Sell spare items (`sell all`).
+6. Descend, or leave the dungeon after the last floor.
+
+Use `menu` or `shop` to return to these choices. Shop categories show up to
+eight rows per page, each with just a stable purchase ID, exact item name,
+and price. For example, `shop weapons 2` opens the next weapons page and
+`shop boots` lists footwear. Use `examine <item id or name>` to read its
+full physical description, damage or armor profile, class proficiency,
+enchantment, and other properties before buying.
+Every vendor stocks all weapon and armor
 types your class can use, in mundane versions and each unlocked enchantment
 tier: +1 after floor one, +2 after floor two, and +3 after floor three.
 There are no +4 or +5 equipment bonuses. Equipment stock is reliable and
-supplies can be purchased repeatedly when you have enough gold.
+supplies can be purchased repeatedly when you have enough gold. Special
+stat-buff affixes are optional dungeon finds; Mira's reliable equipment
+stock does not guarantee them.
 
 Use an ID such as `buy longsword_1` or a full name such as `buy Longsword +1`.
 `buy sword`/`buy weapon` and `buy armor` remain shortcuts for your class's
@@ -470,7 +512,7 @@ versions. The loot tables are self-authored for this game, rather than
 reproductions of official D&D tables. Campaign gold prices, wizard vestments,
 and the Arcane Staff's spell bonuses are homebrew adaptations for solo play.
 
-| Class | Weapon options | Armor or clothing options |
+| Class | Weapon options | Torso armor or clothing options |
 | --- | --- | --- |
 | Warrior | Longsword, Battleaxe, Warhammer, Greatsword, Greataxe, Mace, Spear, Rapier, Shortsword, Dagger, Scimitar, Quarterstaff | Padded Armor, Leather Armor, Studded Leather, Scale Mail, Breastplate, Half Plate, Chain Mail, Splint Armor, Plate Armor |
 | Rogue | Rapier, Shortsword, Dagger, Scimitar | Padded Armor, Leather Armor, Studded Leather |
@@ -480,8 +522,40 @@ Finesse weapons choose the better of Strength and Dexterity. Greatswords
 deal 2d6 damage and greataxes 1d12; both require two hands. Other weapons
 use their displayed damage dice. Light armor adds full Dexterity, medium
 armor caps its Dexterity bonus at +2, and heavy armor ignores Dexterity.
-Some armor imposes Disadvantage on stealth; the inventory and shop explain
-these properties so you can compare damage, protection, and class abilities.
+Some armor imposes Disadvantage on stealth; use `examine` to compare these
+properties with damage, protection, and class abilities.
+
+Armor occupies **five separate slots: boots, gloves, pants, torso, and helmet**.
+Warriors can use leather or mail accessories, Rogues leather accessories,
+and Wizards cloth accessories. Each character starts with a complete mundane
+outfit. The torso determines base AC, Dexterity limits, stealth penalties,
+and whether Mage Armor applies. Mundane accessories do not each add another
+base AC; they complete the outfit while offering their own magical upgrades.
+The catalog contains 37 base weapon and armor types, each with fuller
+physical descriptions and an examined explanation of its actual effects.
+
+Each magical armor piece can contribute its +1, +2, or +3 enchantment to AC.
+The **sum of enchantments across all five pieces is capped at +3**: for
+example, +2 boots and +2 gloves contribute +3 AC together. This cap covers
+armor enchantments; a shield, Warding ring, and spell protection use their
+own existing rules.
+
+Found magical armor has a further chance of one special buff: **20% for +1,
+30% for +2, or 40% for +3 armor**. These percentages apply after a magical
+armor item has been rolled; mundane armor and weapons never receive armor
+buff affixes. Possible names include **Might**, **Agility**, **Intellect**,
+**Insight**, **Presence**, **Shadow**, and **Vigilance**, with choices suited
+to the adventurer's class. The effect matches the piece's enchantment tier:
++2 armor of Shadow adds +2 to Stealth checks, while +2 armor of Agility adds
++2 to the Dexterity **score**, rather than directly adding +2 to its modifier.
+
+Buffs apply only while the actual item is equipped. Only the strongest bonus
+to the same score or skill applies, and boosted ability scores stop at 20.
+Rolled base scores remain unchanged. Strength, Dexterity, Intelligence,
+Wisdom, Charisma, Stealth, and Perception can benefit; these affixes do not
+change Constitution, maximum HP, or healing. Affixed equipment is priced
+at its ordinary enchanted price plus **15 gold per enchantment tier**;
+its resale value is half that total, rounded down.
 
 Every floor has four ordinary rooms without monsters, six ordinary monster
 rooms, a guardian chamber, and a safe entrance. The four ordinary safe
@@ -534,7 +608,11 @@ for your choice, and replaced gear remains in your pack.
 `look` gives vague hints about the container and its contents. Use `loot`
 after a room is safe to reveal exact item names, quantities, bonuses, and
 sell values. `inventory` lists carried equipment and valuables with stable
-IDs. Use `equip <item id or name>` in a safe room or at Mira's sanctuary.
+IDs, rarity, quantity, equipped status, and resale values, eight entries per
+page. It does not print descriptions beside every item. Use `inventory 2`
+for another page and `examine <item id or name>` for an item's full card.
+The same command examines Mira's sale stock while you are in the sanctuary.
+Use `equip <item id or name>` in a safe room or at Mira's sanctuary.
 At the shop, `sell <item id or name>` sells matching valuables or unequipped
 gear; `sell all` sells both categories while protecting equipped items.
 Equipment sells for half Mira's purchase price, rounded down, with a minimum
@@ -559,7 +637,8 @@ messages = game.perform(Action("east"))
 state = game.get_state()       # Redraw from the updated state
 ```
 
-Snapshots expose floor/scene, class, abilities, player equipment/resources,
+Snapshots expose floor/scene, class, base and effective abilities,
+the five equipped armor slots and active buffs, player equipment/resources,
 spell slots, carried valuables, turn budgets,
 encounter scouting and initiative results, whether a foe is unaware,
 opening Hide and examination availability,
@@ -572,7 +651,8 @@ Floor themes and vendor stock live in `campaign.py`, equipment profiles in
 `equipment.py`, and random treasure tables in `loot_library.py`.
 Foe panels can use `Action("examine")` through the same engine.
 Class controls use `Action("hide")`, `Action("cast", "firebolt")`, or
-`Action("sell", "all")`. Both character creators use pure rolled-score
+`Action("sell", "all")`. Item panels can use `Action("examine", "rapier_1")`.
+Both character creators use pure rolled-score
 data from `character_creation.py` to display rolls
 and pass an accepted `Player` to `Game(player=player, seed=7)`. Constructing
 `Game` directly without a player or rolled stats uses class presets.
@@ -584,6 +664,11 @@ only explored passages are drawn. Hidden room descriptions, enemies, and
 treasure remain hidden. In Mira's shop the map shows the
 sanctuary instead of dungeon rooms. Sprite-based gameplay, animations, and
 controller bindings can be added later without replacing combat rules.
+Description colors make the log easier to scan: room descriptions are green,
+item descriptions light blue, Mira's dialogue lavender, combat messages red,
+and entered commands gold. The console interface also uses colors when
+running interactively in a supported terminal. Redirected output stays plain,
+and setting the `NO_COLOR` environment variable disables console colors.
 The test suite includes real five-floor combat, shopping, and a full
 campaign through the terminal launcher. The terminal executable smoke
 check plays all five floors from outside the checkout.

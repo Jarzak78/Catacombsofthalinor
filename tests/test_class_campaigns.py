@@ -55,12 +55,28 @@ def complete_class_adventure(class_id, seed, floors=5):
                     and player.potions):
                 act("potion")
             if class_id == "rogue":
+                foe = game.enemy
+                maximum_regular_hit = (foe.damage_dice[0] * foe.damage_dice[1]
+                                       + foe.damage_bonus)
+                if (player.hp < player.max_hp
+                        and player.hp <= maximum_regular_hit
+                        and game.previous_position is not None
+                        and game.actions_remaining
+                        and (player.level < 2 or game.bonus_action_available)):
+                    # A low potion roll may leave the Rogue within one
+                    # ordinary hit of death. Disengage and recover along a
+                    # cleared route rather than repeatedly trading strikes.
+                    act("flee")
+                    return
                 if game.actions_remaining:
-                    if not game.hidden and not game.rogue_vex:
-                        if player.level >= 2 and game.bonus_action_available:
-                            act("hide")
-                        elif player.level == 1:
-                            act("hide")
+                    # Vex provides accuracy, not Sneak Attack eligibility.
+                    # At level one ordinary Hide consumes the attack action;
+                    # repeated DC-20 attempts expose a fragile Rogue to many
+                    # free strikes. Use the free opening attempt, then strike.
+                    # Cunning Action makes later in-combat Hide worthwhile.
+                    if (not game.hidden and player.level >= 2
+                            and game.bonus_action_available):
+                        act("hide")
                     if game.actions_remaining:
                         if game.hidden and game.enemy_unaware:
                             act("attack")
@@ -117,14 +133,17 @@ def complete_class_adventure(class_id, seed, floors=5):
                    for level, maximum in game.player.max_spell_slots.items())
 
     def recover_if_needed(for_guardian=False):
-        if game.over or not game.player.is_conscious:
+        if game.over or game.enemy is not None or not game.player.is_conscious:
             return
         player = game.player
         missing_health = player.hp < player.max_hp - 3
         missing_slots = not wizard_ready()
         if missing_health or (missing_slots and player.arcane_recovery_available):
             act("rest")
-        safe_health = player.max_hp if for_guardian else max(player.max_hp - 5, 5 + game.floor * 2)
+        # A detected arrival can allow an immediate advantaged strike. The
+        # Rogue has no Second Wind, so enter unfamiliar rooms fully healed.
+        safe_health = (player.max_hp if for_guardian or class_id == "rogue"
+                       else max(player.max_hp - 5, 5 + game.floor * 2))
         if player.hp >= safe_health and wizard_ready():
             return
         route = safe_route_to_entrance()
@@ -218,6 +237,8 @@ def complete_class_adventure(class_id, seed, floors=5):
                 act(careful_route(target)[1][0])
                 if game.enemy:
                     clear_room()
+                    if not game.over and game.position != target:
+                        recover_if_needed(for_guardian=True)
             if not game.over:
                 clear_room()
         if game.over:

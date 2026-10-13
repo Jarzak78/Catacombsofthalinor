@@ -5,7 +5,7 @@ import unittest
 
 from actions import Action
 from campaign import preferred_item_id
-from equipment import equipment_price, make_equipment
+from equipment import ARMOR_SLOTS, DEFAULT_ARMOR_PIECES, equipment_price, make_equipment
 from game import Game
 from loot_library import Loot, TreasureItem
 from player import Player
@@ -51,10 +51,18 @@ class EquipmentPlayerTests(unittest.TestCase):
                 player = Player.create(class_id=class_id)
                 self.assertEqual((player.weapon_id, player.armor_id), (weapon, armor))
                 self.assertEqual(player.armor_class, ac)
-                self.assertEqual(len(player.equipment_inventory), 2)
+                self.assertEqual({item.id for item in player.equipment_inventory},
+                                 {weapon, *DEFAULT_ARMOR_PIECES[class_id].values()})
+                self.assertEqual(len(player.equipment_inventory), 6)
                 self.assertTrue(all(item.bonus == 0 for item in player.equipment_inventory))
                 self.assertTrue(player.is_equipped(player.equipped_weapon))
                 self.assertTrue(player.is_equipped(player.equipped_armor))
+                self.assertEqual(set(player.equipped_armor_slots), set(ARMOR_SLOTS))
+                for slot, item in player.equipped_armor_slots.items():
+                    self.assertEqual(item.slot, slot)
+                    self.assertTrue(any(item is owned for owned in player.equipment_inventory))
+                    self.assertTrue(player.is_equipped(item))
+                self.assertEqual(player.sellable_equipment(), [])
 
     def test_two_handed_weapon_is_a_manual_shield_and_dueling_tradeoff(self):
         player = Player.create()
@@ -249,12 +257,21 @@ class EquipmentPlayerTests(unittest.TestCase):
     def test_characters_do_not_share_default_or_explicit_inventory_lists(self):
         first, second = Player.create(), Player.create()
         first.collect_equipment(make_equipment("longsword", 1))
-        self.assertEqual(len(first.equipment_inventory), 3)
-        self.assertEqual(len(second.equipment_inventory), 2)
+        self.assertIsNot(first.equipment_inventory, second.equipment_inventory)
+        self.assertEqual(len(first.equipment_inventory), 7)
+        self.assertEqual(len(second.equipment_inventory), 6)
+        self.assertEqual({item.id for item in second.equipment_inventory},
+                         {"longsword", *DEFAULT_ARMOR_PIECES["fighter"].values()})
+        self.assertIn(make_equipment("longsword"), first.sellable_equipment())
+        self.assertEqual(second.sellable_equipment(), [])
         supplied = [make_equipment("greatsword")]
         player = Player(equipment_inventory=supplied)
         self.assertEqual(len(supplied), 1)
-        self.assertEqual(len(player.equipment_inventory), 3)
+        self.assertEqual(len(player.equipment_inventory), 7)
+        self.assertIsNot(player.equipment_inventory, supplied)
+        self.assertIs(player.sellable_equipment()[0], supplied[0])
+        self.assertTrue(all(player.is_equipped(piece)
+                            for piece in player.equipped_armor_slots.values()))
 
 
 class EquipmentActionTests(unittest.TestCase):
@@ -405,6 +422,8 @@ class EquipmentActionTests(unittest.TestCase):
     def test_sell_all_sells_pack_and_valuables_without_stripping_equipped_gear(self):
         game = equipment_game("rogue", shop=True)
         weapon, armor = game.player.equipped_weapon, game.player.equipped_armor
+        worn = game.player.equipped_armor_slots
+        original_copies = tuple(game.player.equipment_inventory)
         plate = make_equipment("plate", 2)
         dagger = make_equipment("dagger")
         game.player.collect_equipment(plate)
@@ -414,9 +433,15 @@ class EquipmentActionTests(unittest.TestCase):
         resources = budget(game)
         game.handle_command("sell all")
         self.assertEqual(game.player.gold, plate.sale_value + dagger.sale_value + 14)
-        self.assertEqual(len(game.player.equipment_inventory), 2)
+        self.assertEqual(tuple(game.player.equipment_inventory), original_copies)
+        self.assertEqual(len(game.player.equipment_inventory), 6)
         self.assertIs(game.player.equipped_weapon, weapon)
         self.assertIs(game.player.equipped_armor, armor)
+        for slot, item in worn.items():
+            self.assertIs(game.player.equipped_armor_slots[slot], item)
+            self.assertTrue(any(item is owned for owned in game.player.equipment_inventory))
+            self.assertTrue(game.player.is_equipped(item))
+        self.assertEqual(game.player.sellable_equipment(), [])
         self.assertEqual(game.player.treasure_inventory, [])
         self.assertEqual(budget(game), resources)
         self.assert_pure(game, "sell all")
@@ -435,6 +460,7 @@ class EquipmentActionTests(unittest.TestCase):
         gem = TreasureItem("test_emerald", "Moss emerald", "A green stone.", 7, "valuable", 2)
         jewel = TreasureItem("test_ring", "Engraved silver ring", "A fine silver ring.", 9, "valuable")
         game.player.treasure_inventory = [gem, jewel]
+        original_copies = tuple(game.player.equipment_inventory)
         resources = budget(game)
         game.handle_command("sell MOSS   EMERALD")
         self.assertEqual(game.player.gold, 14)
@@ -443,7 +469,10 @@ class EquipmentActionTests(unittest.TestCase):
         game.handle_command("sell Engraved silver ring")
         self.assertEqual(game.player.gold, 23)
         self.assertEqual(game.player.treasure_inventory, [])
-        self.assertEqual(len(game.player.equipment_inventory), 2)
+        self.assertEqual(tuple(game.player.equipment_inventory), original_copies)
+        self.assertEqual(len(game.player.equipment_inventory), 6)
+        self.assertTrue(all(game.player.is_equipped(item)
+                            for item in game.player.equipment_inventory))
         self.assertEqual(budget(game), resources)
         self.assert_pure(game, "sell Engraved silver ring")
 
@@ -473,15 +502,23 @@ class EquipmentActionTests(unittest.TestCase):
         state = game.get_state()
         inventory = state["player"]["equipment_inventory"]
         self.assertEqual({item["id"] for item in inventory},
-                         {"longsword", "chain_mail", "greatsword_2"})
-        self.assertEqual(sum(item["equipped"] for item in inventory), 2)
+                         {"longsword", "greatsword_2", *DEFAULT_ARMOR_PIECES["fighter"].values()})
+        self.assertEqual(sum(item["equipped"] for item in inventory), 6)
+        self.assertFalse(next(item for item in inventory if item["id"] == "greatsword_2")["equipped"])
         inventory.clear()
-        self.assertEqual(len(game.player.equipment_inventory), 3)
+        self.assertEqual(len(game.player.equipment_inventory), 7)
         display = "\n".join(game.handle_command("inventory"))
         self.assertIn("greatsword_2", display)
         self.assertIn("Greatsword +2", display)
+        self.assertNotIn(greatsword.description, display)
+        self.assertNotIn(greatsword.spec.description, display)
+        examined = "\n".join(game.handle_command("examine Greatsword +2"))
+        self.assertIn(greatsword.description, examined)
+        self.assertIn("2d6", examined)
+        self.assertIn("Carried in your pack", examined)
         self.assertEqual(budget(game), resources)
         self.assert_pure(game, "inventory")
+        self.assert_pure(game, "examine greatsword_2")
 
     def test_real_weapon_attack_uses_greatsword_dice_without_shield_or_dueling(self):
         game = equipment_game()

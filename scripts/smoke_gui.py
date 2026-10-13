@@ -12,6 +12,7 @@ REQUIRED_CHECKS = frozenset({
     "one_reroll", "enter_dungeon", "command_submission", "minimap",
     "room_scouting", "rogue_opening_hide", "rogue_opening_sneak", "responsive_layout",
     "equipment_inventory", "equipment_choices", "vendor_equipment",
+    "colored_messages", "sanctuary_menu", "item_examination",
     "instant_death", "post_death_actions", "new_adventure",
 })
 
