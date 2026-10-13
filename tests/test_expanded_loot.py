@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 from campaign import stock
 from dungeon import Dungeon
+from equipment import EquipmentItem, equipment_options
 from loot_library import (
     Loot, RUNEBLADE_CACHE, TreasureItem, ember_stone, mana_draught,
     suitable_armor_name, suitable_weapon_name, valuable,
@@ -55,26 +56,32 @@ class TreasureModelTests(unittest.TestCase):
         for class_id, weapon, armor in (("fighter", "Longsword", "mail"),
                                          ("rogue", "Rapier", "leather"),
                                          ("wizard", "Staff", "robes")):
-            self.assertIn(weapon, suitable_weapon_name(class_id, 2))
-            self.assertIn(armor, suitable_armor_name(class_id, 2))
+            self.assertIn(weapon.lower(), suitable_weapon_name(class_id, 2).lower())
+            self.assertIn(armor.lower(), suitable_armor_name(class_id, 2).lower())
+            self.assertNotIn("+0", suitable_weapon_name(class_id, 0))
+            self.assertNotIn("+0", suitable_armor_name(class_id, 0))
         for helper in (suitable_weapon_name, suitable_armor_name):
             with self.assertRaises(ValueError):
                 helper("cleric", 1)
             with self.assertRaises(ValueError):
                 helper("fighter", -1)
+            with self.assertRaises(ValueError):
+                helper("fighter", 4)
 
 
 class ExpandedDropTests(unittest.TestCase):
-    def test_every_floor_has_varied_collectible_and_usable_treasure(self):
+    def test_each_floor_can_produce_varied_collectible_and_usable_treasure(self):
         for floor in range(1, 6):
-            dungeon = Dungeon(random.Random(7), floor=floor)
-            caches = [room for room in dungeon.rooms.values() if room.loot and not room.enemy]
-            self.assertEqual(len(caches), 4)
-            items = [item for room in caches for item in room.loot.items]
+            items = []
+            for seed in range(100):
+                dungeon = Dungeon(random.Random(seed), floor=floor)
+                items.extend(item for room in dungeon.rooms.values()
+                             if room.loot for item in room.loot.items)
             self.assertEqual({item.kind for item in items}, {"valuable", "ember", "mana"})
             self.assertEqual(len({item.id for item in items if item.kind == "valuable"}), 4)
-            self.assertEqual(sum(room.loot.gold for room in caches), 30 * floor)
-            self.assertEqual(sum(room.loot.potions for room in caches), 3 if floor == 1 else 5)
+            for item in items:
+                self.assertGreater(item.value, 0)
+                self.assertEqual(item.amount, 1)
 
     def test_generation_reproduces_all_drops_for_each_class(self):
         for class_id in ("fighter", "rogue", "wizard"):
@@ -84,54 +91,61 @@ class ExpandedDropTests(unittest.TestCase):
                 self.assertEqual(first.rooms, second.rooms)
                 self.assertEqual(first.class_id, class_id)
 
-    def test_opening_upgrade_and_all_random_gear_suit_the_class(self):
-        for class_id, weapon, armor in (("fighter", "longsword", "mail"),
-                                         ("rogue", "rapier", "leather"),
-                                         ("wizard", "staff", "robes")):
-            for seed in range(30):
+    def test_random_equipment_has_varied_base_types_and_suits_the_class(self):
+        for class_id in ("fighter", "rogue", "wizard"):
+            found = {"weapon": set(), "armor": set()}
+            no_opening_magic = 0
+            for seed in range(100):
                 dungeon = Dungeon(random.Random(seed), class_id=class_id)
                 adjacent = set(dungeon.get_room(dungeon.start).exits.values())
-                self.assertTrue(any(room.position in adjacent and room.loot
-                                    and room.loot.weapon_bonus == 1
-                                    for room in dungeon.rooms.values()))
+                no_opening_magic += not any(room.position in adjacent and room.loot
+                                           and any(item.bonus for item in room.loot.equipment)
+                                           for room in dungeon.rooms.values())
                 for room in dungeon.rooms.values():
                     if not room.loot:
                         continue
-                    if room.loot.weapon_name:
-                        self.assertIn(weapon, room.loot.weapon_name.lower())
-                    if room.loot.armor_name:
-                        self.assertIn(armor, room.loot.armor_name.lower())
+                    for item in room.loot.equipment:
+                        self.assertIn(class_id, item.spec.classes)
+                        self.assertLessEqual(item.bonus, 3)
+                        found[item.kind].add(item.base_id)
+            self.assertGreater(no_opening_magic, 0)
+            for kind in ("weapon", "armor"):
+                self.assertGreater(len(found[kind]), 1)
 
     def test_rare_upgrades_are_less_common_than_items_and_not_guaranteed(self):
-        cache_upgrades = monster_upgrades = monster_items = 0
+        cache_equipment = monster_equipment = guardian_equipment = monster_items = 0
         runs_without_cache_upgrade = 0
         for seed in range(300):
             dungeon = Dungeon(random.Random(seed), floor=3)
-            run_cache_upgrades = 0
+            run_cache_equipment = 0
             for room in dungeon.rooms.values():
                 loot = room.loot
                 if not loot:
                     continue
-                equipment = bool(loot.weapon_name or loot.armor_name)
+                equipment = bool(loot.equipment)
                 if room.enemy:
-                    monster_upgrades += equipment
-                    monster_items += bool(loot.items)
+                    if room.enemy.boss:
+                        guardian_equipment += equipment
+                    else:
+                        monster_equipment += equipment
+                        monster_items += bool(loot.items)
                 else:
-                    run_cache_upgrades += equipment
-            cache_upgrades += run_cache_upgrades
-            runs_without_cache_upgrade += run_cache_upgrades == 0
+                    run_cache_equipment += equipment
+            cache_equipment += run_cache_equipment
+            runs_without_cache_upgrade += run_cache_equipment == 0
         # Broad bands catch accidental guaranteed drops without brittle seeds.
-        self.assertTrue(0.10 < cache_upgrades / (300 * 4) < 0.20)
-        self.assertTrue(0.04 < monster_upgrades / (300 * 7) < 0.12)
-        self.assertTrue(0.25 < monster_items / (300 * 7) < 0.45)
-        self.assertGreater(monster_items, monster_upgrades)
-        self.assertGreater(runs_without_cache_upgrade, 50)
+        self.assertTrue(0.25 < cache_equipment / (300 * 4) < 0.35)
+        self.assertTrue(0.10 < monster_equipment / (300 * 6) < 0.20)
+        self.assertTrue(0.24 < guardian_equipment / 300 < 0.36)
+        self.assertTrue(0.22 < monster_items / (300 * 6) < 0.34)
+        self.assertGreater(monster_items, monster_equipment)
+        self.assertGreater(runs_without_cache_upgrade, 40)
 
     def test_added_loot_does_not_change_layout_monsters_or_progressive_stats(self):
         for floor in range(1, 6):
             for seed in (0, 7, 42):
                 expanded = Dungeon(random.Random(seed), floor=floor)
-                with patch.object(Dungeon, "_enrich_treasure", lambda *args: None):
+                with patch("dungeon.roll_room_loot", return_value=Loot()):
                     original = Dungeon(random.Random(seed), floor=floor)
                 self.assertEqual(len([r for r in expanded.rooms.values() if r.enemy]), 7)
                 for position, room in expanded.rooms.items():
@@ -148,22 +162,42 @@ class ExpandedDropTests(unittest.TestCase):
 
 
 class ClassShopTests(unittest.TestCase):
-    def test_fighter_stock_keeps_existing_ids_and_prices(self):
-        items = stock(1)
-        self.assertEqual([item.id for item in items], ["potion", "sword", "armor", "charm", "ward", "ember"])
-        self.assertEqual([item.price for item in items], [12, 45, 40, 35, 65, 18])
-        self.assertEqual(items[1].name, "Longsword +2")
-        self.assertEqual(stock(5)[1].value, 5)
+    def test_stock_reliably_supplies_every_proficient_type_and_unlocked_tier(self):
+        for class_id in ("fighter", "rogue", "wizard"):
+            for floor in range(1, 6):
+                with self.subTest(class_id=class_id, floor=floor):
+                    items = stock(floor, class_id)
+                    gear = [item for item in items if item.equipment]
+                    expected = {EquipmentItem(spec.id, bonus).id
+                                for spec in equipment_options(class_id)
+                                for bonus in range(min(floor, 3) + 1)}
+                    self.assertEqual({item.id for item in gear}, expected)
+                    self.assertEqual(len({item.id for item in items}), len(items))
+                    self.assertEqual(items, stock(floor, class_id))
+                    self.assertTrue(all(item.price > 0 for item in items))
+                    self.assertTrue(all(class_id in item.equipment.spec.classes for item in gear))
+                    self.assertLessEqual(max(item.value for item in gear), 3)
+        fighter = {item.id: item for item in stock(1)}
+        self.assertEqual([fighter[key].price for key in ("potion", "charm", "ward", "ember")],
+                         [12, 35, 65, 18])
+        self.assertEqual((fighter["longsword"].name, fighter["longsword"].price), ("Longsword", 10))
+        self.assertEqual((fighter["longsword_1"].name, fighter["longsword_1"].price), ("Longsword +1", 45))
+        self.assertEqual(fighter["chain_mail_1"].price, 55)
 
     def test_rogue_and_wizard_get_correct_gear_and_wizard_can_buy_mana(self):
         rogue = {item.id: item for item in stock(2, "rogue")}
         wizard = {item.id: item for item in stock(2, "wizard")}
-        self.assertIn("Rapier", rogue["sword"].name)
-        self.assertIn("leather", rogue["armor"].name)
-        self.assertIn("Staff", wizard["sword"].name)
-        self.assertIn("robes", wizard["armor"].name)
+        self.assertEqual(rogue["rapier_2"].name, "Rapier +2")
+        self.assertEqual(rogue["studded_leather_2"].name, "Studded Leather +2")
+        self.assertEqual(wizard["arcane_staff_2"].name, "Arcane Staff +2")
+        self.assertEqual(wizard["robes_2"].name, "Robes +2")
+        self.assertTrue(wizard["arcane_staff_2"].equipment.spec.focus)
+        self.assertTrue(wizard["robes_2"].equipment.spec.unarmored)
         self.assertEqual((wizard["mana"].kind, wizard["mana"].price), ("mana", 18))
         self.assertNotIn("mana", rogue)
+        for items in (rogue, wizard):
+            self.assertNotIn("longsword", items)
+            self.assertNotIn("chain_mail", items)
 
 
 if __name__ == "__main__":

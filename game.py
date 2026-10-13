@@ -3,7 +3,8 @@
 from dataclasses import asdict, replace
 from actions import Action
 from battle_flavor import hit_description, miss_description
-from campaign import FLOORS, stock
+from campaign import FLOORS, preferred_item_id, stock
+from equipment import DEFAULT_ARMOR, DEFAULT_WEAPONS, make_equipment, resolve_equipment_id
 from lore_notes import LoreNote
 from loot_flavor import (
     discovery_description, loot_clue_description, preview_description,
@@ -26,7 +27,8 @@ Actions: attack (a), dodge (d), disengage (flee/f)
 Bonus actions: potion (p), second wind (wind)
 Turn control: end, action surge (surge; fighter level 2)
 Rest: rest [dice] (1 hour), long rest (8 hours; entrance only)
-Portal: portal (after guardian), shop, buy <item id>, sell <item id>/sell all, descend
+Portal: portal (after guardian), shop [weapons/armor/supplies], buy <item id or name>, descend
+Equipment: inventory, equip <item id or name> (safe room), sell <item id>/sell all (vendor)
 Classes: skills, hide (Rogue), cast <spell> (Wizard), strike (weapon attack)
 Magic items: ember (action, 3d6 damage), mana (bonus action, restores one level-1 slot)
 Other: stats, inventory (i), help (h), quit (q)
@@ -34,7 +36,7 @@ Other: stats, inventory (i), help (h), quit (q)
 Attacks: d20 + attack bonus vs Armor Class. Natural 1 critically fails for 1 self-damage; 20 crits.
 A miss within 1–2 points of AC gets near-miss narration but deals no damage.
 Hit descriptions reflect damage: glancing 1–5, solid 6–10, heavy 11–15, devastating 16+.
-Critical hits double damage dice, not modifiers. Warrior longsword hits apply Sap.
+Critical hits double damage dice, not modifiers. Weapon mastery determines Sap or Vex effects.
 Dodge gives attacks against you Disadvantage until your next turn.
 Disengage retreats without an opportunity attack; Rogues use a bonus action from level 2.
 Potions heal 2d4+2; Second Wind heals 1d10 + fighter level.
@@ -218,7 +220,7 @@ class Game:
         if command.startswith(("go ", "move ")):
             command = command.split(" ", 1)[1]
         command = ALIASES.get(command, command)
-        if command.startswith(("buy ", "rest ", "read ", "cast ", "sell ")):
+        if command.startswith(("buy ", "rest ", "read ", "cast ", "sell ", "equip ", "shop ")):
             kind, argument = command.split(" ", 1)
             return self.perform(Action(kind, argument))
         return self.perform(Action(command))
@@ -249,25 +251,20 @@ class Game:
         if command == "skills":
             return self.skills()
         if command == "inventory":
-            return [f"Weapon: {self.player.weapon_name} (magic bonus +{self.player.weapon_bonus})",
-                    f"Armor: runic bonus +{self.player.armor_bonus} | Warding ring +{self.player.ward_bonus}",
-                    f"Vitality charm: {self.player.vitality_charm} | Ember stones: {self.player.ember_stones}",
-                    f"Healing potions: {self.player.potions} | Mana draughts: {self.player.mana_draughts} | Gold: {self.player.gold}",
-                    *(f"{item.id}: {item.name} x{item.amount} — {item.value} gold each. {item.description}"
-                      for item in self.player.treasure_inventory),
-                    "Sell gems and jewelry to Mira with 'sell <item id>' or 'sell all'.",
-                    f"Collected notes: {len(self.journal)}. Type 'journal' to browse."]
+            return self.inventory()
         if command == "quit":
             self.quit_requested = True
             return ["You leave the trial for another day. Your first dungeon can wait."]
         if command == "portal":
             return self.enter_portal()
-        if command == "shop":
-            return self.shop()
+        if command == "shop" or command.startswith("shop "):
+            return self.shop(command[5:] if command.startswith("shop ") else "")
         if command.startswith("buy "):
             return self.buy(command[4:])
         if command.startswith("sell "):
             return self.sell(command[5:])
+        if command.startswith("equip "):
+            return self.equip(command[6:])
         if command == "descend":
             return self.descend()
         if self.in_shop:
@@ -336,7 +333,7 @@ class Game:
             cost = "You spend one action studying your foe. Your bonus action is unchanged."
         self.foe_examined = True
         self.free_examine_available = False
-        details = foe_details(self.enemy, self.player.class_id)
+        details = foe_details(self.enemy, self.player.class_id, weapon_mastery=self.player.weapon_mastery)
         count, sides = details["damage_dice"]
         bonus = details["damage_bonus"]
         return [cost, f"Examining {details['name']}", details["description"],
@@ -474,7 +471,7 @@ class Game:
         if (self.player.class_id == "fighter" and self.player.level >= 5
                 and self.enemy is not None and self.player.is_conscious):
             self.actions_remaining += 1
-            lines.append("Extra Attack: your second longsword strike.")
+            lines.append("Extra Attack: your second weapon strike.")
             lines.extend(self.attack_once())
         return lines
 
@@ -489,8 +486,10 @@ class Game:
         self.actions_remaining -= 1
         self.free_examine_available = False
         self.reveal_opening()
-        advantage = self.player.class_id == "rogue" and (self.hidden or self.rogue_vex)
-        sneak_eligible = advantage and not self.sneak_attack_used
+        advantage = self.hidden or self.rogue_vex
+        sneak_eligible = (self.player.class_id == "rogue" and
+                          self.player.equipped_weapon.spec.finesse and advantage and
+                          not self.sneak_attack_used)
         self.hidden = self.rogue_vex = False
         result = roll_attack(self.rng, self.player.attack_bonus, enemy.armor_class,
                              self.player.weapon_dice, self.player.damage_bonus,
@@ -509,12 +508,12 @@ class Game:
                 return [*lines, *self.death_message()]
         if result.hit:
             enemy.take_damage(result.damage)
-            if self.player.class_id == "fighter":
+            if self.player.class_id == "fighter" and self.player.weapon_mastery == "sap":
                 self.enemy_sapped = True
                 lines.append("Sap: the enemy's next attack has Disadvantage before your next turn.")
-            elif self.player.class_id == "rogue":
+            elif self.player.class_id in ("fighter", "rogue") and self.player.weapon_mastery == "vex":
                 self.rogue_vex = True
-                lines.append("Vex: your next rapier attack against this foe has Advantage.")
+                lines.append("Vex: your next weapon attack against this foe has Advantage.")
         if not enemy.is_alive:
             lines.extend(self.defeat_enemy(enemy))
         else:
@@ -536,9 +535,9 @@ class Game:
         return f"{attacker} {verb} {defender} ({roll}) for {result.damage} damage.{critical} {description}"
 
     def weapon_attack_text(self, defender: str, result: AttackResult) -> str:
-        if self.player.class_id == "fighter":
+        if self.player.class_id == "fighter" and self.player.weapon_id == "longsword":
             return self.attack_text("You", defender, result)
-        weapon = "rapier" if self.player.class_id == "rogue" else "staff"
+        weapon = self.player.equipped_weapon.spec.name.lower()
         roll = f"d20 [{'/'.join(map(str, result.rolls))}], total {result.total}"
         if result.critical_fail:
             return (f"You miss {defender} ({roll}). Critical fail! You flourish your {weapon}, "
@@ -553,8 +552,8 @@ class Game:
             band = ("Glancing" if result.damage <= 5 else "Solid" if result.damage <= 10
                     else "Heavy" if result.damage <= 15 else "Devastating")
             story = f"{band} blow! Your {weapon} " + (
-                "flicks through an opening in the foe's guard." if weapon == "rapier" else
-                "cracks against the foe with a sharp wooden report.")
+                "flicks through an opening in the foe's guard." if self.player.equipped_weapon.spec.finesse else
+                "lands squarely with a sharp impact.")
         return (f"You hit {defender} ({roll}) for {result.damage} damage. "
                 + ("Critical hit! " if result.critical else "") + story)
 
@@ -763,23 +762,28 @@ class Game:
         p = self.player
         if p.class_id == "fighter":
             return ["Warrior (Fighter) abilities",
-                    "attack / strike: Strength-based longsword; a hit applies Sap (enemy Disadvantage).",
+                    f"attack / strike: {p.weapon_name}, using {p.weapon_ability}; mastery: {p.weapon_mastery or 'none'}.",
+                    "Sap weapons hinder the enemy's next attack; Vex weapons grant your next strike Advantage.",
+                    "One-handed weapons allow your shield and Dueling; two-handed weapons trade both for damage.",
                     "wind: bonus action, heal 1d10 + level; short rest restores one use.",
                     "surge: level 2, one extra combat action; refreshes on a short or long rest.",
                     "Extra Attack: level 5, 'attack' makes two strikes for one action."]
         if p.class_id == "rogue":
             return ["Rogue abilities",
-                    "attack / strike: Dexterity-based rapier; a hit applies Vex (your next attack has Advantage).",
+                    f"attack / strike: {p.weapon_name}; finesse uses your better Strength or Dexterity modifier.",
+                    "Vex weapons grant your next attack Advantage; other finesse weapons can still deliver Sneak Attack.",
                     f"Sneak Attack: {p.sneak_attack_dice_count}d6 extra on an advantaged hit, once per turn; critical hits double these dice.",
                     "hide: Stealth check vs DC 12 + dungeon floor; action at level 1, bonus action from level 2.",
                     "Spot a new foe with Perception to get one free opening Hide attempt, then attack before it notices you.",
                     "Hiding gives enemy attacks Disadvantage and your next attack Advantage; attacking reveals you.",
+                    "Armor that hinders stealth gives Hide checks Disadvantage.",
                     "Expertise: double proficiency on Stealth, room-entry Perception, and the ambush save.",
                     "Cunning Action: from level 2, 'flee' uses a bonus action and avoids an opportunity attack.",
                     "Uncanny Dodge: from level 5, automatically halve one incoming hit per turn while conscious."]
         return ["Wizard abilities — cast <spell>; each spell below costs one action except Shield",
                 "attack / cast firebolt: no slot, Intelligence attack, 1d10 fire damage (2d10 from level 5).",
-                "strike: Strength-based quarterstaff attack; runic staff bonuses also improve spell attacks and save DC.",
+                "strike: attack with your equipped weapon; finesse uses the better Strength or Dexterity modifier.",
+                "An enchanted Arcane Staff improves spell attacks and save DC; Quarterstaff enchantments improve physical strikes.",
                 "cast missile: level-1 slot, three force darts for 3d4+3 damage; automatically hits.",
                 "cast armor: level-1 slot, base AC 13 + Dexterity until your next long rest; cast before a fight.",
                 "cast shield: level-1 slot and bonus action, +5 AC against the next enemy strike only.",
@@ -788,6 +792,12 @@ class Game:
                 "Short rest: Arcane Recovery restores lower-level slots once per long rest.",
                 "Long rest restores all slots; mana draughts restore one spent level-1 slot.",
                 "These spell costs and durations are dungeon adaptations; 'stats' shows available slots."]
+
+    def _stealth_roll(self) -> tuple[int, str]:
+        rolls = [self.rng.randint(1, 20)]
+        if self.player.stealth_disadvantage:
+            rolls.append(self.rng.randint(1, 20))
+        return min(rolls), "/".join(str(roll) for roll in rolls)
 
     def hide(self) -> list[str]:
         if not self.player.is_alive:
@@ -800,13 +810,15 @@ class Game:
             return ["You are already hidden; your next attack has Advantage."]
         if self.enemy_unaware and self.opening_hide_available:
             self.opening_hide_available = False
-            roll = self.rng.randint(1, 20)
+            roll, dice = self._stealth_roll()
             total, dc = roll + self.player.stealth_bonus, 12 + self.floor
             self.hidden = total >= dc
-            lines = [f"Opening Hide: d20 [{roll}] {self.player.stealth_bonus:+d} = {total} vs DC {dc}. "
+            lines = [f"Opening Hide: d20 [{dice}] {self.player.stealth_bonus:+d} = {total} vs DC {dc}. "
                      + ("You vanish into shadow; the foe remains unaware. 'attack' can deliver a Sneak Attack."
                         if self.hidden else "The foe catches your movement! You are revealed."),
                      "Your opening Hide attempt spends no action or bonus action."]
+            if self.player.stealth_disadvantage:
+                lines.insert(1, "Your armor hinders stealth: roll with Disadvantage.")
             if self.hidden:
                 return [*lines, self.turn_status()]
             return [*lines, *self._roll_encounter_initiative(
@@ -822,13 +834,15 @@ class Game:
                 return ["Hide needs an action at level 1. Wait until your next turn."]
             self.actions_remaining -= 1
             self.free_examine_available = False
-        roll = self.rng.randint(1, 20)
+        roll, dice = self._stealth_roll()
         total = roll + self.player.stealth_bonus
         dc = 12 + self.floor
         self.hidden = total >= dc
-        return [f"Stealth: d20 [{roll}] {self.player.stealth_bonus:+d} = {total} vs DC {dc}. "
+        return [f"Stealth: d20 [{dice}] {self.player.stealth_bonus:+d} = {total} vs DC {dc}. "
                 + ("You slip into shadow; your next attack has Advantage." if self.hidden else
-                   "The foe tracks your movement; you remain visible."), self.turn_status()]
+                   "The foe tracks your movement; you remain visible."),
+                *( ["Your armor hinders stealth: roll with Disadvantage."] if self.player.stealth_disadvantage else []),
+                self.turn_status()]
 
     def cast_spell(self, spell: str) -> list[str]:
         if not self.player.is_alive:
@@ -938,6 +952,45 @@ class Game:
             self.bonus_action_available = False
         return ["You drink a mana draught and recover one level-1 spell slot."]
 
+    def inventory(self) -> list[str]:
+        """Show carried equipment, its stable IDs, and the copies in use."""
+        p = self.player
+        lines = [f"Weapon: {p.weapon_name} | Armor: {p.armor_name} | AC {p.armor_class}",
+                 f"Warding ring +{p.ward_bonus} | Vitality charm: {p.vitality_charm}",
+                 f"Healing potions: {p.potions} | Ember stones: {p.ember_stones} | "
+                 f"Mana draughts: {p.mana_draughts} | Gold: {p.gold}"]
+        grouped = {}
+        for item in p.equipment_inventory:
+            group = grouped.setdefault(item.id, [item, 0, 0])
+            group[1] += 1
+            group[2] += int(p.is_equipped(item))
+        for item, count, equipped in grouped.values():
+            tag = " | equipped" if equipped else ""
+            lines.append(f"{item.id}: {item.name} x{count} | {item.rarity}{tag} | "
+                         f"sell unequipped copies for {item.sale_value} gold each. {item.description}")
+        lines.extend(f"{item.id}: {item.name} x{item.amount} — {item.value} gold each. {item.description}"
+                     for item in p.treasure_inventory)
+        lines.extend(["Equip in a safe room with 'equip <item id or name>'.",
+                      "At Mira's shop, sell valuables and spare gear with 'sell <item id>' or 'sell all'. Equipped gear is kept.",
+                      f"Collected notes: {len(self.journal)}. Type 'journal' to browse."])
+        return lines
+
+    def equip(self, item_id: str) -> list[str]:
+        if not self.player.is_alive:
+            return self.death_message()
+        if self.enemy:
+            return ["Change equipment in a safe room or at Mira's shop, away from a living foe."]
+        selected_id = resolve_equipment_id(item_id)
+        item = next((owned for owned in self.player.equipment_inventory if owned.id == selected_id), None)
+        if item is None:
+            return ["You do not carry that equipment. Use 'inventory' for item IDs and names."]
+        if not self.player.can_equip(item):
+            return [f"Your class is not proficient with {item.name}. You can sell it to Mira."]
+        if not self.player.equip_equipment(item):
+            return ["You already have that equipment in use."]
+        return [f"You equip {item.name}. AC {self.player.armor_class}; "
+                f"weapon attack {self.player.attack_bonus:+d}.", item.description]
+
     def store_valuable(self, item) -> None:
         for index, held in enumerate(self.player.treasure_inventory):
             if held.id == item.id:
@@ -949,13 +1002,19 @@ class Game:
         if not self.player.is_alive:
             return self.death_message()
         if not self.in_shop:
-            return ["Mira buys gems and jewelry in the portal sanctuary. Visit her to sell treasure."]
-        selected = [item for item in self.player.treasure_inventory if item_id == "all" or item.id == item_id]
-        if not selected:
-            return ["No matching valuables. Use 'inventory' for item ids or 'sell all'."]
-        value = sum(item.amount * item.value for item in selected)
+            return ["Mira buys valuables and spare equipment in the portal sanctuary. Visit her to sell treasure."]
+        item_id = " ".join(item_id.casefold().split())
+        normalized = resolve_equipment_id(item_id) or item_id
+        selected = [item for item in self.player.treasure_inventory
+                    if item_id == "all" or item.id == item_id or item.name.casefold() == item_id]
+        gear = [item for item in self.player.sellable_equipment() if item_id == "all" or item.id == normalized]
+        if not selected and not gear:
+            return ["No matching valuables or spare gear. Equipped equipment is kept; use 'inventory' for item IDs."]
+        value = sum(item.amount * item.value for item in selected) + sum(item.sale_value for item in gear)
         ids = {item.id for item in selected}
         self.player.treasure_inventory[:] = [item for item in self.player.treasure_inventory if item.id not in ids]
+        sold_copies = {id(item) for item in gear}
+        self.player.equipment_inventory[:] = [item for item in self.player.equipment_inventory if id(item) not in sold_copies]
         self.player.gold += value
         return [f"Mira buys your treasure for {value} gold. Gold: {self.player.gold}."]
 
@@ -986,19 +1045,25 @@ class Game:
             self.player.gold += loot.gold
             self.player.potions += loot.potions
             lines.append(f"You collect {loot.gold} gold and {loot.potions} healing potion(s).")
-            if loot.weapon_name:
-                lines.append(weapon_discovery_description(loot.weapon_name, loot.weapon_bonus))
-                if self.player.equip_weapon(loot.weapon_name, loot.weapon_bonus):
-                    lines.append("You equip the newly discovered weapon.")
+            finds = list(loot.equipment)
+            for kind, name, bonus in (("weapon", loot.weapon_name, loot.weapon_bonus),
+                                      ("armor", loot.armor_name, loot.armor_bonus)):
+                if name:
+                    canonical = resolve_equipment_id(name)
+                    if canonical:
+                        base_id = canonical.rsplit("_", 1)[0] if canonical.rsplit("_", 1)[-1].isdigit() else canonical
+                    else:
+                        base_id = (DEFAULT_WEAPONS if kind == "weapon" else DEFAULT_ARMOR)[self.player.class_id]
+                        if kind == "weapon" and "staff" in name.lower() and self.player.class_id == "wizard":
+                            base_id = "arcane_staff"
+                    finds.append(make_equipment(base_id, bonus))
+            for item in finds:
+                equipped = self.player.collect_equipment(item)
+                lines.append(f"You find {item.name} ({item.rarity}). Item id: {item.id}. {item.description}")
+                if equipped:
+                    lines.append("You equip this clear upgrade; your previous equipment stays in your pack.")
                 else:
-                    lines.append(f"You keep using {self.player.weapon_name}; this find is no better.")
-            if loot.armor_name:
-                lines.append(f"You uncover {loot.armor_name}. Woven runes reinforce it: +{loot.armor_bonus} Armor Class.")
-                if loot.armor_bonus > self.player.armor_bonus:
-                    self.player.armor_bonus = loot.armor_bonus
-                    lines.append("You equip the newly discovered armor.")
-                else:
-                    lines.append("Your current armor is as good or better; you keep wearing it.")
+                    lines.append(f"You store it in your pack. Use 'equip {item.id}' to choose it, or sell spare gear to Mira.")
             for item in loot.items:
                 lines.append(f"You collect {item.name} x{item.amount}. {item.description}")
                 if item.kind == "ember":
@@ -1066,27 +1131,42 @@ class Game:
         return ["The portal teleports you to Mira's sanctuary. A safe night's rest restores your resources.",
                 *self.describe_room(), *self.shop()]
 
-    def shop(self) -> list[str]:
+    def shop(self, category: str = "") -> list[str]:
         if not self.in_shop:
             return ["Visit the vendor through a cleared floor's portal first."]
+        filters = {"": None, "weapons": "weapon", "weapon": "weapon", "armor": "armor", "supplies": "supplies"}
+        if category not in filters:
+            return ["Use 'shop', 'shop weapons', 'shop armor', or 'shop supplies'."]
+        kind = filters[category]
+        items = [item for item in stock(self.floor, self.player.class_id)
+                 if kind is None or item.kind == kind or (kind == "supplies" and item.equipment is None)]
         return [f"Mira's stock | Gold: {self.player.gold}",
                 *(f"{item.id}: {item.name} — {item.price} gold. {item.description}"
-                  for item in stock(self.floor, self.player.class_id)),
-                "Buy with 'buy <item id>'; sell with 'sell <item id>' or 'sell all'. Type 'descend' when done."]
+                  for item in items),
+                "Browse with 'shop weapons', 'shop armor', or 'shop supplies'.",
+                "Buy with 'buy <item id or name>'; equip carried gear with 'equip <item id>'.",
+                "Sell spare gear and valuables with 'sell <item id>' or 'sell all'. Type 'descend' when done."]
 
     def buy(self, item_id: str) -> list[str]:
         if not self.player.is_alive:
             return self.death_message()
         if not self.in_shop:
             return ["You can only buy items at the vendor."]
-        if item_id == "weapon":
-            item_id = "sword"
-        item = next((item for item in stock(self.floor, self.player.class_id) if item.id == item_id), None)
+        requested = " ".join(item_id.casefold().split())
+        item_id = requested
+        if item_id in ("sword", "weapon", "armor"):
+            item_id = preferred_item_id(self.floor, self.player.class_id,
+                                        "armor" if item_id == "armor" else "weapon")
+        else:
+            item_id = resolve_equipment_id(item_id) or item_id
+        item = next((item for item in stock(self.floor, self.player.class_id)
+                     if item.id == item_id or item.name.casefold() == requested), None)
         if item is None:
             return ["Unknown item. Use 'shop' for item ids and prices."]
         p = self.player
-        redundant = ((item.kind == "weapon" and p.weapon_bonus >= item.value)
-                     or (item.kind == "armor" and p.armor_bonus >= item.value)
+        redundant = ((item.equipment is not None and any(
+                         owned.base_id == item.equipment.base_id and owned.bonus >= item.equipment.bonus
+                         for owned in p.equipment_inventory))
                      or (item.kind == "charm" and p.vitality_charm)
                      or (item.kind == "ward" and p.ward_bonus >= item.value))
         if redundant:
@@ -1094,10 +1174,9 @@ class Game:
         if p.gold < item.price:
             return [f"You need {item.price} gold; you have {p.gold}."]
         p.gold -= item.price
-        if item.kind == "weapon":
-            p.equip_weapon(item.name, item.value)
-        elif item.kind == "armor":
-            p.armor_bonus = item.value
+        equipped = None
+        if item.equipment is not None:
+            equipped = p.collect_equipment(item.equipment)
         elif item.kind == "ward":
             p.ward_bonus = item.value
         elif item.kind == "charm":
@@ -1110,7 +1189,12 @@ class Game:
             p.ember_stones += item.value
         elif item.kind == "mana":
             p.mana_draughts += item.value
-        return [f"Bought {item.name} for {item.price} gold. Gold remaining: {p.gold}."]
+        lines = [f"Bought {item.name} for {item.price} gold. Gold remaining: {p.gold}."]
+        if item.equipment is not None:
+            lines.append("You equip this clear upgrade; your old gear stays in your pack." if equipped else
+                         f"Stored in your pack. Choose it with 'equip {item.equipment.id}' when ready.")
+            lines.append(item.equipment.description)
+        return lines
 
     def descend(self) -> list[str]:
         if not self.player.is_alive:
@@ -1184,7 +1268,15 @@ class Game:
                 "story": {"arrival": self.dungeon.lore.arrival,
                           "revelation": self.dungeon.lore.revelation if self.floor_cleared else None},
                 "scene": "shop" if self.in_shop else "dungeon",
-                "position": list(self.position), "player": {**asdict(self.player), "dead": not self.player.is_alive},
+                "position": list(self.position), "player": {
+                    **asdict(self.player), "dead": not self.player.is_alive,
+                    "armor_name": self.player.armor_name,
+                    "equipment_inventory": [
+                        {**asdict(item), "id": item.id, "name": item.name, "kind": item.kind,
+                         "rarity": item.rarity, "sale_value": item.sale_value,
+                         "description": item.description, "equipped": self.player.is_equipped(item)}
+                        for item in self.player.equipment_inventory],
+                },
                 "journal": [asdict(note) for note in self.journal],
                 "armor_class": self.player.armor_class + (5 if self.shield_active else 0),
                 "attack_bonus": self.player.attack_bonus,
@@ -1201,7 +1293,7 @@ class Game:
                     "free_examine_available": self.free_examine_available,
                     "foe_examined": self.foe_examined,
                     "ambush_advantage": self.ambush_advantage,
-                    "foe_details": foe_details(self.enemy, self.player.class_id) if self.foe_examined and self.enemy else None,
+                    "foe_details": foe_details(self.enemy, self.player.class_id, weapon_mastery=self.player.weapon_mastery) if self.foe_examined and self.enemy else None,
                     "hidden": self.hidden, "vex": self.rogue_vex,
                     "sneak_attack_used": self.sneak_attack_used,
                     "shield_active": self.shield_active,

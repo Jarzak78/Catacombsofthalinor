@@ -5,6 +5,7 @@ import json
 import unittest
 
 from actions import Action
+from equipment import make_equipment
 from game import Game
 from loot_library import Loot, TreasureItem, ember_stone, mana_draught
 from lore_notes import LoreNote
@@ -44,8 +45,8 @@ class TreasureActionTests(unittest.TestCase):
         self.assertEqual(game.elapsed_minutes, clock)
 
     def test_rich_cache_collects_each_kind_once_without_time_or_turn_cost(self):
-        loot = Loot(gold=21, potions=2, weapon_name="Rare runic staff +2", weapon_bonus=2,
-                    armor_name="Moon robes +3", armor_bonus=3,
+        loot = Loot(gold=21, potions=2,
+                    equipment=(make_equipment("arcane_staff", 2), make_equipment("robes", 3)),
                     items=(test_gem(2), replace(ember_stone(), amount=3),
                            replace(mana_draught(), amount=2)))
         game = treasure_game("wizard", loot)
@@ -57,7 +58,7 @@ class TreasureActionTests(unittest.TestCase):
         self.assertEqual(game.player.treasure_inventory, [test_gem(2)])
         self.assertEqual((game.actions_remaining, game.bonus_action_available,
                           game.elapsed_minutes), resources)
-        for detail in ("21 gold", "2 healing", "Rare runic staff +2", "Moon robes +3",
+        for detail in ("21 gold", "2 healing", "Arcane Staff +2", "Robes +3",
                        "Secret emerald x2", "Ember stone x3", "Mana draught x2"):
             self.assertIn(detail, output)
         self.assertTrue(game.room.looted)
@@ -106,8 +107,8 @@ class TreasureActionTests(unittest.TestCase):
         for reason in ("live foe", "shop", "zero HP", "dead"):
             with self.subTest(reason=reason):
                 game = treasure_game("wizard", Loot(
-                    gold=17, potions=2, weapon_name="Rare staff +3", weapon_bonus=3,
-                    armor_name="Rare robe +2", armor_bonus=2,
+                    gold=17, potions=2,
+                    equipment=(make_equipment("arcane_staff", 3), make_equipment("robes", 2)),
                     items=(test_gem(), ember_stone(), mana_draught())))
                 game.room.note = LoreNote("test-note", 1, game.room.name,
                                           "Hidden account", "A forgotten story.", "Keep looking.")
@@ -125,20 +126,19 @@ class TreasureActionTests(unittest.TestCase):
 
     def test_equipment_only_cache_is_visible_but_exact_identity_waits_for_loot(self):
         game = treasure_game("rogue", Loot(
-            weapon_name="Secret rapier +7", weapon_bonus=7,
-            armor_name="Secret leather +6", armor_bonus=6))
+            equipment=(make_equipment("rapier", 3), make_equipment("leather", 2))))
         before = game.get_state()
         look = "\n".join(game.handle_command("look"))
         self.assertIn("loot", look.lower())
-        self.assertNotIn("Secret rapier", look)
-        self.assertNotIn("Secret leather", look)
-        self.assertNotIn("+7", look)
-        self.assertNotIn("+6", look)
+        self.assertNotIn("Rapier", look)
+        self.assertNotIn("Leather Armor", look)
+        self.assertNotIn("+3", look)
+        self.assertNotIn("+2", look)
         self.assertEqual(game.get_state(), before)
         receipt = "\n".join(game.handle_command("loot"))
-        self.assertIn("Secret rapier +7", receipt)
-        self.assertIn("Secret leather +6", receipt)
-        self.assertEqual((game.player.weapon_bonus, game.player.armor_bonus), (7, 6))
+        self.assertIn("Rapier +3", receipt)
+        self.assertIn("Leather Armor +2", receipt)
+        self.assertEqual((game.player.weapon_bonus, game.player.armor_bonus), (3, 2))
         self.assertNotIn("Type 'loot' to search", "\n".join(game.handle_command("look")))
 
     def test_valuable_only_cache_hides_names_counts_and_values_until_collection(self):
@@ -157,16 +157,20 @@ class TreasureActionTests(unittest.TestCase):
         for bonus in (1, 3):
             with self.subTest(bonus=bonus):
                 game = treasure_game(loot=Loot(
-                    weapon_name=f"Found longsword +{bonus}", weapon_bonus=bonus,
-                    armor_name=f"Found mail +{bonus}", armor_bonus=bonus))
-                game.player.weapon_name = "Equipped longsword +3"
-                game.player.weapon_bonus = 3
-                game.player.armor_bonus = 3
+                    equipment=(make_equipment("longsword", bonus),
+                               make_equipment("chain_mail", bonus))))
+                game.player.collect_equipment(make_equipment("longsword", 3))
+                game.player.collect_equipment(make_equipment("chain_mail", 3))
+                equipped_weapon = game.player._equipped_weapon_item
+                equipped_armor = game.player._equipped_armor_item
                 output = "\n".join(game.handle_command("loot"))
-                self.assertIn(f"Found longsword +{bonus}", output)
-                self.assertIn(f"Found mail +{bonus}", output)
-                self.assertEqual(game.player.weapon_name, "Equipped longsword +3")
+                self.assertIn(f"Longsword +{bonus}", output)
+                self.assertIn(f"Chain Mail +{bonus}", output)
+                self.assertEqual(game.player.weapon_name, "Longsword +3")
                 self.assertEqual((game.player.weapon_bonus, game.player.armor_bonus), (3, 3))
+                self.assertIs(game.player._equipped_weapon_item, equipped_weapon)
+                self.assertIs(game.player._equipped_armor_item, equipped_armor)
+                self.assertEqual(len(game.player.equipment_inventory), 6)
                 self.assertTrue(game.room.looted)
                 self.assert_command_pure(game, "loot")
 

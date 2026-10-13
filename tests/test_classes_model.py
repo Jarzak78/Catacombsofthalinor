@@ -2,6 +2,7 @@
 
 import unittest
 
+from equipment import make_equipment
 from player import ABILITY_NAMES, Player
 from tests.test_models import FixedRolls
 
@@ -47,7 +48,8 @@ class ClassModelTests(unittest.TestCase):
         self.assertEqual([getattr(player, name) for name in ABILITY_NAMES], list(stats.values()))
         self.assertEqual((player.hp, player.max_hp), (4, 4))
         self.assertEqual(player.armor_class, 15)
-        self.assertEqual(player.attack_bonus, 5)
+        self.assertEqual(player.attack_bonus, 6)  # Finesse uses the higher Strength modifier.
+        self.assertEqual(player.damage_bonus, 4)
         self.assertEqual(stats, original)
 
     def test_factory_rejects_missing_extra_out_of_range_and_non_integer_stats(self):
@@ -76,6 +78,7 @@ class ClassModelTests(unittest.TestCase):
     def test_class_armor_and_weapon_bonuses_are_independent(self):
         rogue = Player.create(class_id="rogue")
         wizard = Player.create(class_id="wizard")
+        wizard.collect_equipment(make_equipment("arcane_staff", 3))
         for player in (rogue, wizard):
             player.armor_bonus = 2
             player.ward_bonus = 1

@@ -538,6 +538,91 @@ def run_gui_smoke(report_path: Path, name: str = "Adventurer", seed: int | None 
             assert widget.winfo_height() > 1
             assert widget.winfo_rooty() + widget.winfo_height() <= root.winfo_rooty() + root.winfo_height(), "A control is cut off at minimum window size."
         checks.append("responsive_layout")
+        # Equipment fixtures use the same entry field and buttons as a player.
+        # Keep the scouting adventure intact for the death/restart checks below.
+        from equipment import make_equipment
+        from game import Game
+        from loot_library import Loot
+        adventure_game = app.session.game
+        gear_game = Game(name="Inventory tester", seed=7, class_id="rogue")
+        gear_game.room.enemy = None
+        gear_game.room.note = None
+        dagger = make_equipment("dagger", 1)
+        spare_armor = make_equipment("leather")
+        gear_game.room.loot = Loot(equipment=(dagger, spare_armor))
+        gear_game.room.looted = False
+        app.session.game = gear_game
+        app.refresh_dungeon()
+
+        def terminal_text():
+            return app.terminal.get("1.0", "end-1c")
+
+        def submit_widget(command):
+            previous_text = terminal_text()
+            app.command_var.set(command)
+            app.send_button.invoke()
+            root.update()
+            assert not app.command_var.get()
+            return terminal_text()[len(previous_text):]
+
+        gear_rng = gear_game.rng.getstate()
+        gear_budget = (gear_game.elapsed_minutes, gear_game.actions_remaining,
+                       gear_game.bonus_action_available)
+        before_look = terminal_text()
+        app.action_buttons["look"].invoke()
+        root.update()
+        look_text = terminal_text()[len(before_look):]
+        assert "Dagger +1" not in look_text and "dagger_1" not in look_text
+        assert gear_game.player.weapon_id == "rapier" and not gear_game.room.looted
+        app.action_buttons["loot"].invoke()
+        root.update()
+        assert gear_game.room.looted and dagger in gear_game.player.equipment_inventory
+        assert spare_armor in gear_game.player.equipment_inventory
+        assert gear_game.player.weapon_id == "rapier", "Loot must preserve the Vex mastery tradeoff."
+        before_inventory = terminal_text()
+        app.action_buttons["inventory"].invoke()
+        root.update()
+        inventory_text = terminal_text()[len(before_inventory):]
+        assert "dagger_1: Dagger +1" in inventory_text
+        assert "leather: Leather Armor" in inventory_text
+        assert "rapier: Rapier" in inventory_text and "equipped" in inventory_text
+        checks.append("equipment_inventory")
+
+        equip_text = submit_widget("equip dagger_1")
+        assert gear_game.player.equipped_weapon is dagger and "You equip Dagger +1" in equip_text
+        assert gear_game.player.weapon_mastery == ""
+        submit_widget("equip Rapier")
+        assert gear_game.player.weapon_id == "rapier" and gear_game.player.weapon_bonus == 0
+        assert gear_game.rng.getstate() == gear_rng
+        assert (gear_game.elapsed_minutes, gear_game.actions_remaining,
+                gear_game.bonus_action_available) == gear_budget
+        checks.append("equipment_choices")
+
+        gear_game.in_shop = True
+        gear_game.player.gold = 100
+        app.refresh_dungeon()
+        shop_text = submit_widget("shop weapons")
+        assert "dagger_1: Dagger +1" in shop_text and "rapier_1: Rapier +1" in shop_text
+        assert "studded_leather_1:" not in shop_text and "potion:" not in shop_text
+        assert not app.map_state["visible"]
+        submit_widget("buy rapier_1")
+        held_weapon = gear_game.player.equipped_weapon
+        held_armor = gear_game.player.equipped_armor
+        assert held_weapon.id == "rapier_1" and held_weapon.bonus <= 3
+        gold_after_buy = gear_game.player.gold
+        submit_widget("sell leather")
+        assert gear_game.player.gold == gold_after_buy + spare_armor.sale_value
+        assert spare_armor not in gear_game.player.equipment_inventory
+        submit_widget("sell all")
+        assert gear_game.player.equipped_weapon is held_weapon
+        assert gear_game.player.equipped_armor is held_armor
+        assert len(gear_game.player.equipment_inventory) == 2
+        assert gear_game.rng.getstate() == gear_rng
+        assert (gear_game.elapsed_minutes, gear_game.actions_remaining,
+                gear_game.bonus_action_available) == gear_budget
+        checks.append("vendor_equipment")
+        app.session.game = adventure_game
+        app.refresh_dungeon()
         # A real enemy strike must end the run and enable a clean restart.
         class FatalRolls:
             def __init__(self):

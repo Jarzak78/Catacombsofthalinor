@@ -449,12 +449,13 @@ class DungeonTests(unittest.TestCase):
                 self.assertIsNone(entrance.loot)
                 boss_rooms = [room for room in dungeon.rooms.values() if room.enemy and room.enemy.boss]
                 ordinary = [room for room in dungeon.rooms.values() if room.enemy and not room.enemy.boss]
-                treasures = [room for room in dungeon.rooms.values() if room.loot and not room.enemy]
+                safe_rooms = [room for room in dungeon.rooms.values()
+                              if room.position != dungeon.start and not room.enemy]
                 self.assertEqual(len(boss_rooms), 1)
                 self.assertEqual(boss_rooms[0].position, dungeon.boss_position)
                 self.assertEqual(len(ordinary), 6)
                 self.assertGreaterEqual(sum(room.enemy.xp_reward for room in ordinary), 300)
-                self.assertEqual(len(treasures), 4)
+                self.assertEqual(len(safe_rooms), 4)
                 for room in dungeon.rooms.values():
                     if room.loot:
                         self.assertTrue(room.loot.has_treasure)
@@ -479,21 +480,28 @@ class DungeonTests(unittest.TestCase):
                         self.assertGreaterEqual(enemy.gold_reward, 0)
                         self.assertTrue(enemy.is_alive)
 
-    def test_every_dungeon_provides_potions_and_an_early_weapon_upgrade(self):
-        for seed in range(50):
+    def test_room_drops_are_valid_and_neither_potions_nor_magic_are_guaranteed(self):
+        without_magic = without_potions = 0
+        for seed in range(100):
             with self.subTest(seed=seed):
                 dungeon = Dungeon(random.Random(seed))
                 loot_rooms = [room for room in dungeon.rooms.values() if room.loot]
-                self.assertGreater(sum(room.loot.potions for room in loot_rooms), 0)
-                upgrades = [room for room in loot_rooms if room.loot.weapon_bonus > Player().weapon_bonus]
-                self.assertTrue(upgrades)
-                adjacent = set(dungeon.get_room(dungeon.start).exits.values())
-                self.assertTrue(any(room.position in adjacent for room in upgrades))
+                without_magic += not any(item.bonus for room in loot_rooms
+                                         for item in room.loot.equipment)
+                without_potions += not any(room.loot.potions for room in loot_rooms)
                 for room in loot_rooms:
                     loot = room.loot
                     self.assertTrue(loot.has_treasure)
-                    if loot.weapon_bonus:
-                        self.assertTrue(loot.weapon_name)
+                    self.assertGreaterEqual(loot.gold, 0)
+                    self.assertIn(loot.potions, (0, 1))
+                    self.assertLessEqual(len(loot.equipment), 1)
+                    self.assertIsNone(loot.weapon_name)
+                    self.assertIsNone(loot.armor_name)
+                    for item in loot.equipment:
+                        self.assertTrue(item.name)
+                        self.assertIn(item.bonus, (0, 1, 2, 3))
+        self.assertGreater(without_magic, 0)
+        self.assertGreater(without_potions, 0)
 
     def test_map_hides_unvisited_contents_and_marks_current_room(self):
         dungeon = Dungeon(random.Random(9))
@@ -506,7 +514,8 @@ class DungeonTests(unittest.TestCase):
     def test_map_reveals_encounters_and_updates_cleared_rooms(self):
         dungeon = Dungeon(random.Random(9))
         enemy_room = next(room for room in dungeon.rooms.values() if room.enemy and not room.enemy.boss)
-        treasure_room = next(room for room in dungeon.rooms.values() if room.loot and not room.enemy)
+        treasure_room = next(room for room in dungeon.rooms.values()
+                             if room.loot and room.loot.has_treasure and not room.enemy)
         boss_room = dungeon.get_room(dungeon.boss_position)
         for room in (enemy_room, treasure_room, boss_room):
             room.visited = True

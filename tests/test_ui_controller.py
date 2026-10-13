@@ -7,7 +7,9 @@ import unittest
 from unittest.mock import Mock, patch
 
 from character_creation import ABILITY_NAMES
+from equipment import make_equipment
 from game import Game
+from loot_library import Loot
 from player import Player
 from ui_controller import DesktopSession, minimap_data
 
@@ -266,6 +268,28 @@ class MinimapTests(unittest.TestCase):
         self.assertEqual(result["label"], "The Lantern Between Worlds")
         self.assertEqual(result["nodes"], [])
         self.assertEqual(result["edges"], [])
+
+    def test_equipment_only_cache_marks_a_visited_room_without_revealing_item_details(self):
+        game = Game(seed=7)
+        direction, position = next(iter(game.room.exits.items()))
+        room = game.dungeon.get_room(position)
+        room.enemy = None
+        room.note = None
+        room.visited = True
+        room.loot = Loot(equipment=(make_equipment("longsword", 3),))
+        before, rng_before = game.get_state(), game.rng.getstate()
+        map_data = minimap_data(before)
+        node = next(node for node in map_data["nodes"]
+                    if (node["x"], node["y"]) == position)
+        self.assertEqual(node["marker"], "$")
+        self.assertNotIn("Longsword", json.dumps(map_data))
+        self.assertNotIn("longsword", json.dumps(map_data))
+        self.assertEqual(game.get_state(), before)
+        self.assertEqual(game.rng.getstate(), rng_before)
+        room.visited = False
+        node = next(node for node in minimap_data(game.get_state())["nodes"]
+                    if (node["x"], node["y"]) == position)
+        self.assertEqual(node["marker"], "?")
 
     def test_live_engine_minimap_reads_do_not_advance_any_game_state(self):
         session = DesktopSessionTests().adventure()

@@ -378,6 +378,7 @@ class PreparatoryHideTests(unittest.TestCase):
 
     def test_low_dexterity_opening_critical_clamps_combined_damage_once(self):
         game, direction, _ = entry_game(values=[12, 20, 2, 20, 1, 1, 1, 1])
+        game.player.strength = 3  # Keep both finesse ability modifiers at -4.
         game.player.dexterity = 3  # Dexterity -4, expertise +4, so Stealth +0.
         game.handle_command(direction)
         game.handle_command("hide")

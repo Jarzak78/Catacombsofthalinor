@@ -4,6 +4,11 @@ from dataclasses import dataclass, field
 import random
 from typing import TYPE_CHECKING
 
+from equipment import (
+    DEFAULT_ARMOR, DEFAULT_WEAPONS, MAX_ENCHANTMENT,
+    EquipmentItem, make_equipment, resolve_equipment_id,
+)
+
 if TYPE_CHECKING:
     from loot_library import TreasureItem
 
@@ -68,6 +73,9 @@ class Player:
     arcane_recovery_available: bool = True
     mana_draughts: int = 0
     treasure_inventory: list["TreasureItem"] = field(default_factory=list)
+    weapon_id: str = ""
+    armor_id: str = ""
+    equipment_inventory: list[EquipmentItem] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         """Normalize the class while keeping explicit statistics and HP."""
@@ -93,6 +101,28 @@ class Player:
             self.spell_slots = {}
             self.arcane_recovery_available = False
             self.mage_armor_active = False
+        self.weapon_id = self.weapon_id or DEFAULT_WEAPONS[self.class_id]
+        self.armor_id = self.armor_id or DEFAULT_ARMOR[self.class_id]
+        weapon = make_equipment(self.weapon_id, self.weapon_bonus)
+        armor = make_equipment(self.armor_id, self.armor_bonus)
+        if (weapon.kind != "weapon" or armor.kind != "armor"
+                or not self.can_equip(weapon) or not self.can_equip(armor)):
+            raise ValueError("Starting equipment must be usable by the chosen class.")
+        self.equipment_inventory = list(self.equipment_inventory)
+        if any(not isinstance(item, EquipmentItem) for item in self.equipment_inventory):
+            raise ValueError("Equipment inventory must contain EquipmentItem objects.")
+        # Keep an actual owned object for each slot, so a duplicate remains
+        # sellable without accidentally selling the copy currently in use.
+        for item, attribute in ((weapon, "_equipped_weapon_item"),
+                                (armor, "_equipped_armor_item")):
+            owned = next((candidate for candidate in self.equipment_inventory
+                          if candidate == item), None)
+            if owned is None:
+                owned = item
+                self.equipment_inventory.append(owned)
+            setattr(self, attribute, owned)
+        if self.weapon_name == "Longsword" or not self.weapon_name:
+            self.weapon_name = weapon.name
 
     @classmethod
     def create(cls, name: str = "Adventurer", class_id: str = "fighter",
@@ -134,13 +164,46 @@ class Player:
 
     @property
     def weapon_dice(self) -> tuple[int, int]:
-        """Damage dice for the class's one-handed starting weapon."""
-        return (1, 6 if self.class_id == "wizard" else 8)
+        """Damage dice for the equipped weapon, including two-handed weapons."""
+        return self.equipped_weapon.spec.damage_dice
 
     @property
     def weapon_ability(self) -> str:
-        """The ability used for attacks with this class's weapon."""
-        return "dexterity" if self.class_id == "rogue" else "strength"
+        """Use the stronger of Strength and Dexterity for a finesse weapon."""
+        return self._weapon_ability_for(self.equipped_weapon)
+
+    def _weapon_ability_for(self, item: EquipmentItem) -> str:
+        if item.spec.finesse and self.dexterity > self.strength:
+            return "dexterity"
+        return "strength"
+
+    @property
+    def equipped_weapon(self) -> EquipmentItem:
+        """The owned item occupying the weapon slot."""
+        return self._equipped_weapon_item
+
+    @property
+    def equipped_armor(self) -> EquipmentItem:
+        """The owned item occupying the armor slot."""
+        return self._equipped_armor_item
+
+    @property
+    def armor_name(self) -> str:
+        """The armor's display name, including its current enchantment."""
+        return make_equipment(self.armor_id, self.armor_bonus).name
+
+    @property
+    def weapon_mastery(self) -> str:
+        return self.equipped_weapon.spec.mastery
+
+    @property
+    def focus_bonus(self) -> int:
+        """Only a weapon marked as an arcane focus improves spells."""
+        return self.weapon_bonus if self.equipped_weapon.spec.focus else 0
+
+    @property
+    def stealth_disadvantage(self) -> bool:
+        return self.equipped_armor.spec.stealth_disadvantage
 
     @property
     def weapon_ability_modifier(self) -> int:
@@ -183,14 +246,27 @@ class Player:
 
     @property
     def armor_class(self) -> int:
-        """Class armor, Dexterity where applicable, and magical protection."""
-        if self.class_id == "fighter":
-            base = 18
-        elif self.class_id == "rogue":
-            base = 12 + self.dexterity_modifier
+        """Armor, permitted Dexterity, a compatible shield, and enchantments."""
+        return self._armor_class_for(self.equipped_armor, self.equipped_weapon,
+                                     armor_bonus=self.armor_bonus)
+
+    def _armor_class_for(self, armor: EquipmentItem, weapon: EquipmentItem,
+                         armor_bonus: int | None = None,
+                         mage_armor_active: bool | None = None) -> int:
+        spec = armor.spec
+        base = spec.base_ac
+        magical_armor = self.mage_armor_active if mage_armor_active is None else mage_armor_active
+        if spec.unarmored and magical_armor:
+            base = max(base, 13)
+        if spec.dex_cap == 0:
+            dexterity = 0
+        elif spec.dex_cap is None:
+            dexterity = self.dexterity_modifier
         else:
-            base = (13 if self.mage_armor_active else 10) + self.dexterity_modifier
-        return base + self.armor_bonus + self.ward_bonus
+            dexterity = min(self.dexterity_modifier, spec.dex_cap)
+        shield = 2 if self.class_id == "fighter" and not weapon.spec.two_handed else 0
+        enchantment = armor.bonus if armor_bonus is None else armor_bonus
+        return base + dexterity + shield + enchantment + self.ward_bonus
 
     @property
     def attack_bonus(self) -> int:
@@ -205,7 +281,8 @@ class Player:
     @property
     def damage_bonus(self) -> int:
         """Weapon ability, the warrior's Dueling, and magic weapon bonus."""
-        dueling = 2 if self.class_id == "fighter" else 0
+        dueling = (2 if self.class_id == "fighter"
+                   and not self.equipped_weapon.spec.two_handed else 0)
         return self.weapon_ability_modifier + dueling + self.weapon_bonus
 
     @property
@@ -233,7 +310,7 @@ class Player:
     @property
     def spell_attack_bonus(self) -> int:
         """Wizard spell accuracy, including a magical staff's focus bonus."""
-        return self.intelligence_modifier + self.proficiency_bonus + self.weapon_bonus
+        return self.intelligence_modifier + self.proficiency_bonus + self.focus_bonus
 
     @property
     def spell_save_dc(self) -> int:
@@ -425,10 +502,130 @@ class Player:
         return levels_gained
 
     def equip_weapon(self, name: str, bonus: int) -> bool:
-        """Equip a compatible class weapon only when its magic bonus improves."""
-        if bonus <= self.weapon_bonus:
+        """Compatibility helper for older callers that provide a weapon name.
+
+        New loot uses collect_equipment() and explicit equipment choices use
+        equip_equipment(). This helper keeps the former bonus-only upgrade
+        rule, while retaining custom names used by older authored fixtures.
+        """
+        if (not self.is_alive or not isinstance(name, str) or not name.strip()
+                or type(bonus) is not int or not 0 <= bonus <= MAX_ENCHANTMENT
+                or bonus <= self.weapon_bonus):
+            return False
+        recognized = resolve_equipment_id(name)
+        if recognized is None:
+            base_id = DEFAULT_WEAPONS[self.class_id]
+        else:
+            base_id = recognized
+            if recognized.rsplit("_", 1)[-1].isdigit():
+                base_id = recognized.rsplit("_", 1)[0]
+        item = make_equipment(base_id, bonus)
+        if item.kind != "weapon" or not self.can_equip(item):
+            return False
+        self.collect_equipment(item, auto_equip=False)
+        if not self.equip_equipment(item):
             return False
         self.weapon_name = name
-        self.weapon_bonus = bonus
         return True
+
+    def can_equip(self, item: EquipmentItem) -> bool:
+        """Whether the class is proficient with an equipment type."""
+        return (isinstance(item, EquipmentItem)
+                and self.class_id in item.spec.classes)
+
+    def is_equipped(self, item: EquipmentItem) -> bool:
+        """Protect the actual equipped copy while permitting duplicate sales."""
+        return (item is self._equipped_weapon_item
+                or item is self._equipped_armor_item)
+
+    def sellable_equipment(self) -> list[EquipmentItem]:
+        """A detached list of owned equipment that is not currently in use."""
+        return [item for item in self.equipment_inventory if not self.is_equipped(item)]
+
+    def equip_equipment(self, item: EquipmentItem) -> bool:
+        """Equip one owned, compatible item, including an intentional downgrade.
+
+        An item must already belong to this character. Class restrictions,
+        ownership, and death are checked before changing either slot.
+        """
+        if (not self.is_alive or not self.can_equip(item)
+                or not any(owned is item for owned in self.equipment_inventory)):
+            return False
+        if item.kind == "weapon":
+            if item == self.equipped_weapon:
+                return False
+            self._equipped_weapon_item = item
+            self.weapon_id = item.base_id
+            self.weapon_name = item.name
+            self.weapon_bonus = item.bonus
+        else:
+            if item == self.equipped_armor:
+                return False
+            self._equipped_armor_item = item
+            self.armor_id = item.base_id
+            self.armor_bonus = item.bonus
+        return True
+
+    def _weapon_scores(self, item: EquipmentItem,
+                       bonus: int | None = None) -> tuple[float, int]:
+        """Expected physical damage and attack bonus for safe auto-equipping."""
+        ability = ability_modifier(getattr(self, self._weapon_ability_for(item)))
+        dice_count, dice_sides = item.spec.damage_dice
+        enchantment = item.bonus if bonus is None else bonus
+        dueling = 2 if self.class_id == "fighter" and not item.spec.two_handed else 0
+        damage = dice_count * (dice_sides + 1) / 2 + ability + dueling + enchantment
+        accuracy = ability + self.proficiency_bonus + enchantment
+        return damage, accuracy
+
+    def _is_clear_upgrade(self, item: EquipmentItem) -> bool:
+        """Choose automatic upgrades without making equipment tradeoffs."""
+        if not self.can_equip(item):
+            return False
+        if item.kind == "armor":
+            if item.spec.stealth_disadvantage and not self.stealth_disadvantage:
+                return False
+            # Mage Armor can conceal weaker mundane protection. An automatic
+            # change must remain safe after resting, when the spell expires.
+            modes = (False, True) if self.class_id == "wizard" else (None,)
+            current = tuple(self._armor_class_for(
+                self.equipped_armor, self.equipped_weapon,
+                armor_bonus=self.armor_bonus, mage_armor_active=mode) for mode in modes)
+            candidate = tuple(self._armor_class_for(
+                item, self.equipped_weapon, mage_armor_active=mode) for mode in modes)
+            return (all(new >= old for new, old in zip(candidate, current))
+                    and any(new > old for new, old in zip(candidate, current)))
+        if self._armor_class_for(self.equipped_armor, item,
+                                 armor_bonus=self.armor_bonus) < self.armor_class:
+            return False
+        candidate_focus = item.bonus if item.spec.focus else 0
+        if self.class_id == "wizard" and candidate_focus < self.focus_bonus:
+            return False
+        if item.base_id == self.weapon_id:
+            return item.bonus > self.weapon_bonus
+        current_mastery = self.equipped_weapon.spec.mastery
+        if current_mastery and item.spec.mastery != current_mastery:
+            return False
+        candidate_damage, candidate_accuracy = self._weapon_scores(item)
+        current_damage, current_accuracy = self._weapon_scores(
+            self.equipped_weapon, bonus=self.weapon_bonus)
+        dominates = (candidate_damage >= current_damage
+                     and candidate_accuracy >= current_accuracy)
+        improves = (candidate_damage > current_damage
+                    or candidate_accuracy > current_accuracy
+                    or (self.class_id == "wizard" and candidate_focus > self.focus_bonus))
+        return dominates and improves
+
+    def collect_equipment(self, item: EquipmentItem, auto_equip: bool = True) -> bool:
+        """Store a find, returning whether it was automatically equipped.
+
+        Incompatible equipment remains in the pack for sale. Tradeoffs such
+        as a two-handed weapon's lost shield require an explicit equip choice.
+        """
+        if (not self.is_alive or not isinstance(item, EquipmentItem)
+                or any(owned is item for owned in self.equipment_inventory)):
+            return False
+        self.equipment_inventory.append(item)
+        if auto_equip and self._is_clear_upgrade(item):
+            return self.equip_equipment(item)
+        return False
 

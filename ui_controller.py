@@ -164,7 +164,7 @@ def minimap_data(state: dict) -> dict:
             loot = room.get("loot")
             if enemy and enemy.get("hp", 0) > 0:
                 marker = "B" if enemy.get("boss", False) else "E"
-            elif loot and any(loot.get(key) for key in ("gold", "potions", "weapon_name", "items", "armor_name")):
+            elif loot and any(loot.get(key) for key in ("gold", "potions", "weapon_name", "items", "armor_name", "equipment")):
                 marker = "$"
             elif room.get("note") and not room.get("note_collected", False):
                 marker = "N"

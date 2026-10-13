@@ -94,10 +94,11 @@ trial, or `--floors 3` for a three-floor campaign. Adventures are held in memory
 quitting ends the current run.
 
 Start with `look`, `map`, `skills`, and `help`. The entrance is safe. Search
-treasure rooms with `loot`; gems, jewelry, useful magical supplies, and
-occasional equipment upgrades can join your gold and healing potions.
-A nearby first-floor treasure room always holds a +1 weapon suited to
-your class: longsword, rapier, or magical staff.
+cleared rooms with `loot`; gems, jewelry, useful magical supplies, and
+mundane or enchanted equipment can join your gold and healing potions.
+Each room's contents are rolled when its floor is generated. No room
+guarantees a magic weapon, magic armor, or even searchable treasure;
+Mira's shop supplies reliable equipment and consumables between floors.
 
 Entering a room with a living foe shows only combat information: the enemy,
 any scouting or initiative result, your turn, and combat commands. Room descriptions,
@@ -106,7 +107,7 @@ exits, treasure, and documents wait until the fight is over. During combat,
 room and discover what you can collect.
 
 In a safe room, `look` describes the hiding place and gives vague clues such
-as a metallic glimmer, stoppered glass, or a gleaming longsword. Specific treasure
+as a metallic glimmer, stoppered glass, or the outline of a blade. Specific treasure
 names, quantities, and equipment bonuses are revealed when you use `loot`. Looking
 collects and equips nothing. Collected treasure disappears from later previews,
 while uncollected documents remain visible.
@@ -117,8 +118,11 @@ and floor. Treasure and documents share one discovery description when found
 together. The following lines list exactly what you collect. Discovery prose
 lives in `loot_flavor.py` and consumes no random rolls.
 Found equipment receives an exact name and bonus, and an explanation of
-whether it replaces your current gear. Better compatible gear equips
-automatically; a weaker find never downgrades what you use.
+whether it replaces your current gear. Clear improvements equip
+automatically; choices involving damage, shields, masteries, armor, or
+stealth stay in your pack for you to decide. Your previous equipment is
+retained. Use `inventory` to see stable item IDs and `equip <id or name>`
+to change gear in a safe room or at the vendor.
 
 ## Commands
 
@@ -127,6 +131,7 @@ automatically; a weaker find never downgrades what you use.
 | `north`, `south`, `east`, `west` | Move through a passage; `n/s/e/w` also work. |
 | `look`, `map`, `stats`, `inventory`, `skills` | Inspect surroundings, character, possessions, or class abilities. |
 | `loot` | Collect treasure and lore documents once the room is safe. |
+| `equip <item id or name>` | Equip an owned weapon or armor in a safe room or at Mira's shop. |
 | `journal` | List your collected notes with journal numbers. |
 | `read`, `read 1`, `read <note id>` | Read the latest note, a numbered note, or a collected note by its id. |
 | `examine`, `inspect`, `examine foe` | Study your current foe's description, HP, AC, attacks, and tactical clues. |
@@ -145,8 +150,8 @@ automatically; a weaker find never downgrades what you use.
 | `rest 0`, `rest 1`, `rest 2` | Limit the Hit Dice spent in that one-hour rest. |
 | `long rest` | Rest for eight hours at the entrance. |
 | `portal` | After defeating a guardian, enter its portal to the vendor. |
-| `shop`, `buy <item id>` | View vendor prices and purchase an upgrade or supply. |
-| `sell <item id>`, `sell all` | At Mira's shop, sell collected valuables for their displayed gold value. |
+| `shop`, `buy <item id or name>` | View vendor prices and purchase equipment or supplies. |
+| `sell <item id or name>`, `sell all` | At Mira's shop, sell valuables and unequipped equipment; equipped gear is protected. |
 | `descend` | Leave the vendor for the next floor; after the final floor, return home. |
 | `ember` | Consume an Ember stone and an action to deal 3d6 magic damage. |
 | `help`, `quit` | Show instructions or end the adventure. |
@@ -189,9 +194,11 @@ foe follows the opening-encounter rules below.
   you do not lose a turn. Natural 1 and 20 have no special effect on
   Perception checks or saves. These are game house rules.
 - Weapon attacks roll `d20 + attack ability modifier + proficiency + magic
-  weapon bonus` against Armor Class. Warriors and Wizard staff attacks use
-  Strength; Rogue rapier attacks use Dexterity. Wizard spell attacks use
-  Intelligence, proficiency, and their magical staff's focus bonus.
+  weapon bonus` against Armor Class. Weapons normally use Strength;
+  finesse weapons use whichever is better of Strength and Dexterity.
+  Wizard spell attacks use Intelligence, proficiency, and an enchanted
+  Arcane Staff's focus bonus. Enchanted daggers and ordinary quarterstaffs
+  improve physical attacks without improving spells.
   Natural 1 always misses; natural 20 always hits.
   As a game house rule, a natural 1 also causes 1 HP of self-damage to
   the attacker and a comic mishap description.
@@ -232,6 +239,9 @@ It starts with chain mail and shield (AC 18), a longsword, the Dueling
 style, and a d10 Hit Die. A sword strike deals `1d8 + Strength modifier + 2`,
 plus its magic bonus. Longsword **Sap** gives the enemy Disadvantage on its
 next attack before the Warrior's next turn; repeated Sap does not stack.
+Sap also works with a mace, but does not apply to a weapon without that
+mastery. Two-handed weapons use their own damage dice and lose both the
+shield's +2 AC and Dueling's +2 damage while equipped.
 
 **Second Wind** uses a bonus action to restore `1d10 + level` HP. It starts
 with two uses, gains a third at level 4, restores one use on a short rest,
@@ -241,11 +251,14 @@ adding one action this turn once per short or long rest. At level 5,
 
 ### Rogue
 
-The Rogue starts with a rapier, leather armor (AC `12 + Dexterity modifier`),
-and a d8 Hit Die. Rapier strikes use Dexterity for both attack and damage.
+The Rogue starts with a rapier, studded leather (AC `12 + Dexterity modifier`),
+and a d8 Hit Die. Finesse strikes use the better of Strength and Dexterity
+for both attack and damage.
 **Stealth and Perception expertise** add twice proficiency to their checks.
 The rapier's **Vex** grants Advantage on your next strike against that foe
 after a successful hit.
+Vex also works with a shortsword; daggers and scimitars do not grant it.
+Armor marked as hindering stealth gives Disadvantage on Hide checks.
 
 Use **hide** to roll a Stealth check against `DC 12 + dungeon floor`. Success
 gives Advantage on your next attack and Disadvantage to enemy attacks until
@@ -262,14 +275,14 @@ Outside that opening opportunity, hiding costs an action at level 1;
 **Cunning Action** makes it a bonus action from level 2, and also lets you
 flee using a bonus action instead of an action. Hidden status ends when you
 attack. **Sneak Attack** adds `ceil(level / 2)d6` once per turn when an
-eligible rapier strike has Advantage; these dice double on a critical hit.
+eligible finesse-weapon strike has Advantage; these dice double on a critical hit.
 At level 5, **Uncanny Dodge** automatically halves damage from one enemy hit
 per turn while you are alive. The game applies it without a separate
 reaction command.
 
 ### Wizard
 
-The Wizard starts with a staff, known spells, AC `10 + Dexterity modifier`,
+The Wizard starts with a quarterstaff, robes, known spells, AC `10 + Dexterity modifier`,
 and a d6 Hit Die. `attack` and `cast firebolt` use **Fire Bolt**, a slot-free
 Intelligence spell attack dealing `1d10` damage (`2d10` at level 5). Use
 `strike` for a physical staff attack based on Strength.
@@ -282,7 +295,11 @@ Intelligence spell attack dealing `1d10` damage (`2d10` at level 5). Use
 | `cast frost` | Action and a level-2 slot: an Intelligence spell attack deals `3d8`; a hit also gives the enemy Disadvantage on its next attack. |
 | `cast fireball` | Action and a level-3 slot: deals `8d6`, halved by a successful enemy Dexterity save. |
 
-Spell save DC is `8 + Intelligence modifier + proficiency + staff focus bonus`.
+Spell save DC is `8 + Intelligence modifier + proficiency + Arcane Staff focus bonus`.
+Only an enchanted Arcane Staff adds a focus bonus. Protective wizard vestments
+are homebrew unarmored clothing: Robes have base AC 10, Warded Robes 11, and
+Battlemage Robes 12. Mage Armor raises that base to at least 13, then adds
+Dexterity and the garment's enchantment bonus.
 This is a single-enemy dungeon; Fireball targets the current foe. Shield's bonus-action
 cost and Frost are simplified game abilities, rather than full tabletop
 spell implementations.
@@ -344,6 +361,7 @@ Tk screens, and `ui_controller.py` manages character creation and commands.
 `Main.py` owns terminal input;
 `game.py` handles commands and turns; `combat.py` resolves dice;
 `player.py` tracks character resources;
+`equipment.py` defines weapon and armor profiles, enchantments, and campaign prices;
 `character_creation.py` rolls and accepts starting abilities;
 `dungeon.py` generates the map; `monster_catalog.py` defines each floor's
 ordinary foes, combat statistics, descriptions, and attack narration.
@@ -421,36 +439,107 @@ rest restores HP, Hit Dice, class resources, and Wizard spell slots once per
 visit, and ends Mage Armor. Potions, Ember stones, and Mana draughts are
 not replenished for free.
 
-Use `shop` to see stable purchase ids and `buy sword`, `buy armor`, `buy charm`,
-`buy ward`, `buy potion`, or `buy ember` to purchase. Equipment is applied
-immediately. The sword and armor tier improves at deeper vendors. The
+Use `shop` to see stable purchase IDs, exact item names, prices, damage or
+armor profiles, and properties. Every vendor stocks all weapon and armor
+types your class can use, in mundane versions and each unlocked enchantment
+tier: +1 after floor one, +2 after floor two, and +3 after floor three.
+There are no +4 or +5 equipment bonuses. Equipment stock is reliable and
+supplies can be purchased repeatedly when you have enough gold.
+
+Use an ID such as `buy longsword_1` or a full name such as `buy Longsword +1`.
+`buy sword`/`buy weapon` and `buy armor` remain shortcuts for your class's
+preferred gear at the highest unlocked tier; the Wizard's weapon shortcut
+selects an Arcane Staff. Purchases enter your pack, with clear improvements
+equipping automatically. Use `equip` to choose gear with tradeoffs. The
 Vitality charm grants +4 maximum and current HP; the Warding ring grants
 +1 AC. Both are permanent and can only be bought once. Healing potions
 use a bonus action, and Ember stones use an action for automatic 3d6 damage.
 Wizards can also use `buy mana` for a Mana draught (18 gold).
-Insufficient gold, duplicate permanent items, and downgrades never cost gold.
+Insufficient gold and duplicate permanent items never cost gold. You may
+purchase a different equipment type even when it is not an automatic upgrade.
 
 When done shopping, type `descend`. Your character, XP, gold, supplies, and
 equipment carry forward. Old floors close behind you. After the last floor,
 the vendor's departure portal returns you home and completes the campaign.
 Victory is not declared until you choose to leave the final vendor.
 
-## Treasure and valuables
+## Equipment, treasure, and rarity
+
+Weapons and armor use familiar D&D-style profiles, with mundane and +1/+2/+3
+versions. The loot tables are self-authored for this game, rather than
+reproductions of official D&D tables. Campaign gold prices, wizard vestments,
+and the Arcane Staff's spell bonuses are homebrew adaptations for solo play.
+
+| Class | Weapon options | Armor or clothing options |
+| --- | --- | --- |
+| Warrior | Longsword, Battleaxe, Warhammer, Greatsword, Greataxe, Mace, Spear, Rapier, Shortsword, Dagger, Scimitar, Quarterstaff | Padded Armor, Leather Armor, Studded Leather, Scale Mail, Breastplate, Half Plate, Chain Mail, Splint Armor, Plate Armor |
+| Rogue | Rapier, Shortsword, Dagger, Scimitar | Padded Armor, Leather Armor, Studded Leather |
+| Wizard | Dagger, Quarterstaff, Arcane Staff | Robes, Warded Robes, Battlemage Robes |
+
+Finesse weapons choose the better of Strength and Dexterity. Greatswords
+deal 2d6 damage and greataxes 1d12; both require two hands. Other weapons
+use their displayed damage dice. Light armor adds full Dexterity, medium
+armor caps its Dexterity bonus at +2, and heavy armor ignores Dexterity.
+Some armor imposes Disadvantage on stealth; the inventory and shop explain
+these properties so you can compare damage, protection, and class abilities.
+
+Every floor has four ordinary rooms without monsters, six ordinary monster
+rooms, a guardian chamber, and a safe entrance. The four ordinary safe
+rooms are possible caches, not guaranteed treasure rooms. Each searchable
+room rolls the following categories independently, so it may hold several
+categories or none. Equipment finds are class-compatible; weapons and armor
+are equally likely before selecting a type and enchantment.
+
+| Searchable room | Gold | Healing potion | Gem or jewelry | Magical supply | Equipment |
+| --- | --- | --- | --- | --- | --- |
+| Ordinary safe room | 75% | 35% | 40% | 15% | 30% |
+| Ordinary monster room | 30% | 15% | 20% | 10% | 15% |
+| Guardian chamber | 70% | 35% | 50% | 25% | 30% |
+
+Defeated monsters also award their listed gold automatically; that combat
+reward is separate from treasure found by searching their rooms. Searchable
+contents are rolled once when a floor is generated. `look`, `loot`, and
+revisiting never reroll the contents or award the same treasure twice.
+
+When equipment is found, its bonus is rolled using this depth-based table.
+These percentages are conditional on the room's equipment roll succeeding.
+
+| Floor | Mundane | +1 | +2 | +3 |
+| --- | --- | --- | --- | --- |
+| 1 | 70% | 27% | 2.9% | 0.1% |
+| 2 | 55% | 35% | 9.5% | 0.5% |
+| 3 | 40% | 40% | 18% | 2% |
+| 4 | 25% | 42% | 28% | 5% |
+| 5 | 15% | 40% | 35% | 10% |
+
+Weapon rarities are uncommon (+1), rare (+2), and very rare (+3). Armor
+rarities are rare (+1), very rare (+2), and legendary (+3). The percentage
+table selects enchantment bonuses for either kind; the item then displays
+its corresponding rarity.
+
+For example, a first-floor safe room has a 30% chance of equipment, then
+a 0.1% chance that equipment is +3: a **0.03% overall chance of any +3 item**
+in that room. A particular weapon is rarer still. Magical equipment is never
+guaranteed, while stronger finds become more common with depth.
 
 The dungeon contains gems, jewelry, and magical trinkets alongside coins and
 healing potions. Safe caches and defeated foes can hold treasure. Some magical
 finds are usable supplies: **Ember stones** deal `3d6` damage with `ember`,
 and **Mana draughts** restore a Wizard's spent level-1 slot with `mana`.
 Other classes can carry Mana draughts to sell to Mira instead.
-Rare finds include class-compatible magical weapons and armor; better gear
-equips automatically and weaker gear never replaces your current equipment.
+Mundane gear can be worth keeping too: a different weapon or armor profile
+may suit your tactics. Clear upgrades equip automatically, tradeoffs wait
+for your choice, and replaced gear remains in your pack.
 
 `look` gives vague hints about the container and its contents. Use `loot`
 after a room is safe to reveal exact item names, quantities, bonuses, and
-sell values. `inventory` lists collected valuables and their stable item ids.
-At Mira's sanctuary, use `sell <item id>` to sell all copies of that valuable
-or `sell all` to exchange your collected valuables for gold, then buy upgrades. Supplies
-and equipped gear are separate from the valuables you sell.
+sell values. `inventory` lists carried equipment and valuables with stable
+IDs. Use `equip <item id or name>` in a safe room or at Mira's sanctuary.
+At the shop, `sell <item id or name>` sells matching valuables or unequipped
+gear; `sell all` sells both categories while protecting equipped items.
+Equipment sells for half Mira's purchase price, rounded down, with a minimum
+of one gold. Gems and jewelry use their displayed sale values. Healing
+potions and usable class supplies remain separate from unequipped gear.
 
 ## Interfaces, graphics, and controls
 
@@ -479,7 +568,8 @@ stock with stable item ids. Unvisited room contents are hidden. Reading a
 snapshot does not advance randomness or time; changing it cannot mutate
 the game. Coordinates identify rooms within the current floor. Text
 commands and buttons use the same `perform` path as future controller input.
-Floor themes and item definitions live separately in `campaign.py`.
+Floor themes and vendor stock live in `campaign.py`, equipment profiles in
+`equipment.py`, and random treasure tables in `loot_library.py`.
 Foe panels can use `Action("examine")` through the same engine.
 Class controls use `Action("hide")`, `Action("cast", "firebolt")`, or
 `Action("sell", "all")`. Both character creators use pure rolled-score

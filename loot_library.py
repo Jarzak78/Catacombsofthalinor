@@ -2,6 +2,45 @@
 
 from dataclasses import dataclass
 
+from equipment import (
+    DEFAULT_ARMOR, DEFAULT_WEAPONS, EquipmentItem, equipment_options, make_equipment,
+)
+
+
+# Every category receives its own roll. A room can contain several categories,
+# or nothing at all; neither a potion nor a magic item is guaranteed.
+ROOM_LOOT_CHANCES = {
+    "cache": {"gold": 0.75, "potions": 0.35, "valuable": 0.40, "trinket": 0.15, "equipment": 0.30},
+    "monster": {"gold": 0.30, "potions": 0.15, "valuable": 0.20, "trinket": 0.10, "equipment": 0.15},
+    "guardian": {"gold": 0.70, "potions": 0.35, "valuable": 0.50, "trinket": 0.25, "equipment": 0.30},
+}
+
+# These are conditional on finding equipment, not chances per room. Mundane
+# equipment is always possible. A +3 item on floor one is exceptionally rare:
+# 0.1% of equipment finds, or 0.03% of ordinary cache searches.
+ENCHANTMENT_WEIGHTS = {
+    1: {0: 70000, 1: 27000, 2: 2900, 3: 100},
+    2: {0: 55000, 1: 35000, 2: 9500, 3: 500},
+    3: {0: 40000, 1: 40000, 2: 18000, 3: 2000},
+    4: {0: 25000, 1: 42000, 2: 28000, 3: 5000},
+    5: {0: 15000, 1: 40000, 2: 35000, 3: 10000},
+}
+
+
+def _validate_floor(floor: int) -> None:
+    if not isinstance(floor, int) or isinstance(floor, bool) or not 1 <= floor <= 5:
+        raise ValueError("Invalid treasure floor.")
+
+
+def _validate_class(class_id: str) -> None:
+    if class_id not in ("fighter", "rogue", "wizard"):
+        raise ValueError("Invalid treasure class.")
+
+
+def _validate_bonus(bonus: int) -> None:
+    if not isinstance(bonus, int) or isinstance(bonus, bool) or not 0 <= bonus <= 3:
+        raise ValueError("Equipment enchantment must be between +0 and +3.")
+
 
 @dataclass(frozen=True)
 class TreasureItem:
@@ -36,12 +75,15 @@ class Loot:
     items: tuple[TreasureItem, ...] = ()
     armor_name: str | None = None
     armor_bonus: int = 0
+    equipment: tuple[EquipmentItem, ...] = ()
 
     def __post_init__(self) -> None:
         amounts = (self.gold, self.potions, self.weapon_bonus, self.armor_bonus)
         if any(not isinstance(amount, int) or isinstance(amount, bool) or amount < 0
                for amount in amounts):
             raise ValueError("Loot amounts must be nonnegative whole numbers.")
+        _validate_bonus(self.weapon_bonus)
+        _validate_bonus(self.armor_bonus)
         for name in (self.weapon_name, self.armor_name):
             if name is not None and (not isinstance(name, str) or not name.strip()):
                 raise ValueError("Equipment names cannot be empty.")
@@ -51,25 +93,27 @@ class Loot:
             raise ValueError("An armor bonus needs an armor name.")
         if not isinstance(self.items, tuple) or any(not isinstance(item, TreasureItem) for item in self.items):
             raise ValueError("Loot items must be a tuple of TreasureItem objects.")
+        if (not isinstance(self.equipment, tuple)
+                or any(not isinstance(item, EquipmentItem) for item in self.equipment)):
+            raise ValueError("Loot equipment must be a tuple of EquipmentItem objects.")
 
     @property
     def has_treasure(self) -> bool:
-        return bool(self.gold or self.potions or self.weapon_name or self.items or self.armor_name)
+        return bool(self.gold or self.potions or self.weapon_name or self.items
+                    or self.armor_name or self.equipment)
 
 
 def suitable_weapon_name(class_id: str, bonus: int) -> str:
-    """Name an upgrade that the selected adventurer can actually use."""
-    names = {"fighter": "Thalinor Longsword", "rogue": "Thalinor Rapier", "wizard": "Runic Staff"}
-    if class_id not in names or bonus < 0:
-        raise ValueError("Invalid weapon class or bonus.")
-    return f"{names[class_id]} +{bonus}"
+    """Name the class's default weapon; retained for legacy callers."""
+    _validate_class(class_id)
+    _validate_bonus(bonus)
+    return make_equipment(DEFAULT_WEAPONS[class_id], bonus).name
 
 
 def suitable_armor_name(class_id: str, bonus: int) -> str:
-    names = {"fighter": "Runic mail", "rogue": "Runic leather", "wizard": "Runic robes"}
-    if class_id not in names or bonus < 0:
-        raise ValueError("Invalid armor class or bonus.")
-    return f"{names[class_id]} +{bonus}"
+    _validate_class(class_id)
+    _validate_bonus(bonus)
+    return make_equipment(DEFAULT_ARMOR[class_id], bonus).name
 
 
 # Valuables remain in the pack until sold. Deeper floors hold richer stones
@@ -90,8 +134,7 @@ _JEWELRY = (
 
 def valuable(floor: int, variant: int = 0) -> TreasureItem:
     """Create one floor-themed gem or a piece of jewelry with a stable id."""
-    if not 1 <= floor <= 5:
-        raise ValueError("Invalid treasure floor.")
+    _validate_floor(floor)
     if variant == 0:
         item_id, name, description, value = _GEMS[floor - 1]
     else:
@@ -110,11 +153,63 @@ def mana_draught() -> TreasureItem:
 
 
 def rare_equipment(rng, floor: int, class_id: str) -> dict:
-    """Choose one class-appropriate upgrade; the caller controls rarity."""
-    tier = min(floor + 1, 5)
-    if rng.random() < 0.5:
-        return {"weapon_name": suitable_weapon_name(class_id, tier), "weapon_bonus": tier}
-    return {"armor_name": suitable_armor_name(class_id, tier), "armor_bonus": tier}
+    """Legacy fields for one equipment find, including possible mundane gear.
+
+    New room generation uses ``roll_room_loot`` and concrete EquipmentItem
+    objects so weapon damage and armor profiles survive collection.
+    """
+    item = roll_equipment(rng, floor, class_id)
+    return {f"{item.kind}_name": item.name, f"{item.kind}_bonus": item.bonus}
+
+
+def roll_enchantment(rng, floor: int) -> int:
+    """Select +0 through +3 using the floor's cumulative rarity table."""
+    _validate_floor(floor)
+    weights = ENCHANTMENT_WEIGHTS[floor]
+    roll = rng.randrange(sum(weights.values()))
+    cumulative = 0
+    for bonus, weight in weights.items():
+        cumulative += weight
+        if roll < cumulative:
+            return bonus
+    raise RuntimeError("The enchantment table does not cover its random range.")
+
+
+def roll_equipment(rng, floor: int, class_id: str) -> EquipmentItem:
+    """Find a usable weapon or armor, then roll its enchantment separately."""
+    _validate_floor(floor)
+    _validate_class(class_id)
+    kind = "weapon" if rng.random() < 0.5 else "armor"
+    spec = rng.choice(equipment_options(class_id, kind))
+    return make_equipment(spec.id, roll_enchantment(rng, floor))
+
+
+def roll_room_loot(rng, floor: int, class_id: str, source: str = "cache") -> Loot:
+    """Roll a room's discoverable contents once, without guaranteed upgrades.
+
+    ``cache`` means a room without a foe. ``monster`` and ``guardian`` describe
+    their rooms' searchable treasure, separate from a defeated foe's fixed
+    combat reward. The caller stores this result so ``look`` and ``loot`` do
+    not reroll it. Empty bundles are legitimate results.
+    """
+    _validate_floor(floor)
+    _validate_class(class_id)
+    if not isinstance(source, str) or source not in ROOM_LOOT_CHANCES:
+        raise ValueError("Invalid room treasure source.")
+
+    found = {category: rng.random() < chance
+             for category, chance in ROOM_LOOT_CHANCES[source].items()}
+    gold_ranges = {"cache": (8, 20), "monster": (4, 10), "guardian": (12, 30)}
+    minimum, maximum = gold_ranges[source]
+    gold = rng.randint(minimum * floor, maximum * floor) if found["gold"] else 0
+    potions = 1 if found["potions"] else 0
+    items = []
+    if found["valuable"]:
+        items.append(valuable(floor, rng.randrange(4)))
+    if found["trinket"]:
+        items.append(ember_stone() if rng.random() < 0.5 else mana_draught())
+    equipment = (roll_equipment(rng, floor, class_id),) if found["equipment"] else ()
+    return Loot(gold=gold, potions=potions, items=tuple(items), equipment=equipment)
 
 
 HEALER_CACHE = Loot(gold=4, potions=1)

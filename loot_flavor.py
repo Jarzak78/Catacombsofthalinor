@@ -1,5 +1,6 @@
 """Authored search descriptions, independent of rewards and game state."""
 
+from equipment import EQUIPMENT, resolve_equipment_id
 from room import Room
 
 
@@ -358,16 +359,29 @@ def loot_clue_description(room: Room) -> str:
         if loot.potions:
             clues.append("the glint of stoppered glass")
         if loot.weapon_name:
-            clues.append("a gleaming longsword" if "longsword" in loot.weapon_name.lower()
-                         else "a slender blade" if "rapier" in loot.weapon_name.lower()
-                         else "a rune-carved staff" if "staff" in loot.weapon_name.lower()
+            clues.append("a gleaming blade" if "sword" in loot.weapon_name.lower()
+                         or "rapier" in loot.weapon_name.lower()
+                         else "a length of polished wood" if "staff" in loot.weapon_name.lower()
                          else "the outline of an old weapon")
         if loot.armor_name:
             clues.append("folds of old protective gear")
+        for item in loot.equipment:
+            if item.kind == "armor":
+                clues.append("folds of old protective gear")
+            elif item.spec.id in ("longsword", "greatsword", "rapier", "shortsword", "dagger", "scimitar"):
+                clues.append("a gleaming blade")
+            elif item.spec.id in ("quarterstaff", "arcane_staff"):
+                clues.append("a length of polished wood")
+            elif item.spec.id == "spear":
+                clues.append("the outline of a pointed shaft")
+            else:
+                clues.append("the outline of a hafted weapon")
         if any(item.kind == "valuable" for item in loot.items):
             clues.append("a glint of cut stone or jewelry")
         if any(item.kind in ("ember", "mana") for item in loot.items):
             clues.append("a faint magical shimmer")
+    # Multiple items with the same outline do not reveal their count.
+    clues = list(dict.fromkeys(clues))
     if not clues:
         return "Something here may be worth a closer search. Type 'loot' to investigate."
     if len(clues) == 1:
@@ -389,5 +403,10 @@ def weapon_discovery_description(name: str, bonus: int) -> str:
         detail = "Dust falls from an old weapon scarred by forgotten battles."
     if bonus:
         detail += " Fine runes glow faintly as you turn it in the lantern light."
-    focus = " Its focus also improves spell attacks and save DC." if "staff" in name.lower() else ""
+    resolved_id = resolve_equipment_id(name)
+    base_id = (resolved_id if resolved_id in EQUIPMENT
+               else resolved_id.rsplit("_", 1)[0] if resolved_id else None)
+    is_focus = (EQUIPMENT[base_id].focus if base_id is not None
+                else "runic staff" in name.lower())
+    focus = " Its focus also improves spell attacks and save DC." if is_focus and bonus else ""
     return f"You uncover {name}. {detail} Weapon bonus: +{bonus} to attack and damage.{focus}"

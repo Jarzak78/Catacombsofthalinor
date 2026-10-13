@@ -5,6 +5,7 @@ import json
 import unittest
 
 from actions import Action
+from equipment import make_equipment
 from game import Game
 from player import Player
 from room import Enemy
@@ -105,7 +106,7 @@ class WizardActionTests(ActionAssertions, unittest.TestCase):
 
     def test_fire_bolt_critical_doubles_dice_but_not_focus_bonus(self):
         game = class_game("wizard", [20, 1, 1])
-        game.player.weapon_bonus = 2
+        game.player.collect_equipment(make_equipment("arcane_staff", 2))
         output = game.handle_command("cast firebolt")
         self.assertEqual(game.enemy.hp, 98)
         self.assertIn("Critical", "\n".join(output))
@@ -367,6 +368,7 @@ class RogueActionTests(ActionAssertions, unittest.TestCase):
 
     def test_low_rolled_dexterity_applies_penalty_once_to_combined_sneak_damage(self):
         game = class_game("rogue", [15, 10, 1, 6])
+        game.player.strength = 3  # Both finesse choices must have the -4 penalty.
         game.player.dexterity = 3
         game.hidden = True
         output = "\n".join(game.handle_command("attack"))
@@ -380,6 +382,7 @@ class RogueActionTests(ActionAssertions, unittest.TestCase):
 
     def test_low_dexterity_critical_clamps_after_combining_all_doubled_dice(self):
         game = class_game("rogue", [20, 10, 1, 1, 1, 1])
+        game.player.strength = 3  # Finesse cannot substitute a stronger ability.
         game.player.dexterity = 3
         game.hidden = True
         output = "\n".join(game.handle_command("attack"))

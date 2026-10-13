@@ -107,17 +107,61 @@ _FIGHTER_TACTICS = (
 )
 
 
-def foe_details(enemy: Enemy, class_id: str = "fighter") -> dict:
+def _equipment_tactics(class_id: str, weapon_mastery: str) -> str:
+    """Describe supported class options without assuming a starting weapon."""
+    if class_id == "fighter":
+        advice = (
+            "Compare its Armor Class, attack bonus, and damage before trading blows. "
+            "Dodge spends your action to hinder visible attacks until your next turn. "
+            "Second Wind uses a bonus action if you have a use remaining; "
+            "Action Surge is available from level 2 if it is charged."
+        )
+        if weapon_mastery == "sap":
+            return (
+                "Your equipped weapon applies Sap on a hit, giving its next attack "
+                "Disadvantage before your next turn. " + advice
+            )
+        if weapon_mastery == "vex":
+            return (
+                "Your equipped weapon applies Vex on a hit, granting your next "
+                "attack against this foe Advantage. " + advice
+            )
+        return advice
+    if class_id == "rogue":
+        advice = (
+            "If you spot a new room's foe unnoticed, your first opening Hide "
+            "attempt is free. A successful Hide check gives your next weapon "
+            "attack Advantage. Advantage on a finesse-weapon hit allows "
+            "Sneak Attack once per turn; a critical hit doubles its extra damage dice. "
+            "Armor that hinders stealth gives Hide checks Disadvantage."
+        )
+        if weapon_mastery == "vex":
+            advice += (
+                " Your equipped weapon applies Vex on a hit, granting your next "
+                "attack against this foe Advantage."
+            )
+        return advice
+    return (
+        _CLASS_TACTICS["wizard"]
+        + " An enchanted Arcane Staff improves spell attacks and save DC; "
+        "other weapon enchantments improve physical strikes only."
+    )
+
+
+def foe_details(enemy: Enemy, class_id: str = "fighter",
+                weapon_mastery: str | None = None) -> dict:
     """Return authored flavor and the foe's current, possibly scaled stats.
 
     Every call creates a new JSON-compatible view. Reading these details
     neither changes the enemy nor consumes random numbers. The descriptions
     do not grant resistances, vulnerabilities, conditions, or extra attacks.
-    Tactical advice uses the adventurer's supported abilities; the default
-    preserves the original warrior advice for existing callers.
+    Passing the current weapon's mastery gives equipment-aware class advice.
+    Omitting it preserves the original advice for existing callers.
     """
     if class_id not in ("fighter", "rogue", "wizard"):
         raise ValueError("Choose fighter, rogue, or wizard for foe advice.")
+    if weapon_mastery not in (None, "", "sap", "vex"):
+        raise ValueError("Weapon mastery must be sap, vex, empty, or None.")
     profile = _PROFILES.get(enemy.name)
     spec = MONSTERS_BY_NAME.get(enemy.name)
     if profile is None and spec is not None:
@@ -130,6 +174,10 @@ def foe_details(enemy: Enemy, class_id: str = "fighter") -> dict:
         description, tactics = profile or _UNKNOWN_PROFILE
         if class_id in _CLASS_TACTICS:
             tactics = _CLASS_TACTICS[class_id]
+    if weapon_mastery is not None:
+        class_tactics = _equipment_tactics(class_id, weapon_mastery)
+        tactics = (f"{spec.tactics} {class_tactics}"
+                   if profile is None and spec is not None else class_tactics)
     return {
         "name": enemy.name,
         "description": description,

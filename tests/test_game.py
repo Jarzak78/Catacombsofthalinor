@@ -277,14 +277,15 @@ class TurnTests(unittest.TestCase):
 class ExplorationTests(unittest.TestCase):
     def test_treasure_can_only_be_collected_once(self):
         game = Game(seed=7)
-        target = next(position for position, room in game.dungeon.rooms.items()
-                      if room.loot and room.loot.weapon_name)
-        for direction in route_to(game, target):
-            game.handle_command(direction)
+        from equipment import make_equipment
+        from loot_library import Loot
+        game.room.loot = Loot(gold=12, potions=1, equipment=(make_equipment("longsword", 1),))
         game.handle_command("loot")
-        gold = game.player.gold
+        state = game.get_state()
+        rng = game.rng.getstate()
         game.handle_command("loot")
-        self.assertEqual(game.player.gold, gold)
+        self.assertEqual(game.get_state(), state)
+        self.assertEqual(game.rng.getstate(), rng)
         self.assertEqual(game.player.weapon_bonus, 1)
         self.assertEqual(game.player.attack_bonus, 6)
 

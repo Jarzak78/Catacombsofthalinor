@@ -64,8 +64,10 @@ class CampaignTests(unittest.TestCase):
         game.player.gold = 300
         for item in ('sword', 'armor', 'charm', 'ward', 'potion', 'ember'):
             game.perform(Action('buy', item))
-        self.assertEqual(game.player.gold, 85)
-        self.assertEqual(game.player.weapon_bonus, 2)
+        self.assertEqual(game.player.gold, 70)
+        self.assertEqual(game.player.weapon_bonus, 1)
+        self.assertEqual(game.player.equipped_weapon.id, 'longsword_1')
+        self.assertEqual(game.player.equipped_armor.id, 'chain_mail_1')
         self.assertEqual(game.player.armor_class, 20)
         self.assertEqual(game.player.max_hp, 16)
         self.assertEqual(game.player.potions, 4)
@@ -189,7 +191,7 @@ class CampaignTests(unittest.TestCase):
                 self.assertEqual(commands.count('portal'), 5)
                 self.assertEqual(commands.count('descend'), 5)
                 self.assertGreaterEqual(game.player.level, 5)
-                self.assertEqual(game.player.weapon_bonus, 5)
+                self.assertEqual(game.player.weapon_bonus, 3)
 
     def test_real_cli_completes_default_campaign_from_another_directory(self):
         game, commands, _ = complete_adventure(7, floors=5)

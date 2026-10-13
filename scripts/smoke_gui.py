@@ -11,6 +11,7 @@ REQUIRED_CHECKS = frozenset({
     "title_screen", "character_creation", "class_choice", "4d6_drop_lowest",
     "one_reroll", "enter_dungeon", "command_submission", "minimap",
     "room_scouting", "rogue_opening_hide", "rogue_opening_sneak", "responsive_layout",
+    "equipment_inventory", "equipment_choices", "vendor_equipment",
     "instant_death", "post_death_actions", "new_adventure",
 })
 

@@ -1,15 +1,21 @@
 """Real five-floor Rogue and Wizard campaigns and source-launcher replays."""
 
 from collections import deque
+from dataclasses import replace
+from heapq import heappop, heappush
 import os
 from pathlib import Path
 import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from game import Game
-from tests.test_game import route_to
+from campaign import FLOORS, preferred_item_id, stock
+from loot_library import roll_room_loot as original_roll_room_loot
+from monster_catalog import MONSTERS_BY_NAME
+from tests.test_game import complete_adventure
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -33,7 +39,7 @@ def complete_class_adventure(class_id, seed, floors=5):
         transcript.extend(game.handle_command(command))
 
     def clear_room():
-        for turn in range(150):
+        for _ in range(150):
             if game.over or game.enemy is None:
                 break
             player = game.player
@@ -53,7 +59,7 @@ def complete_class_adventure(class_id, seed, floors=5):
                     if not game.hidden and not game.rogue_vex:
                         if player.level >= 2 and game.bonus_action_available:
                             act("hide")
-                        elif player.level == 1 and turn == 0:
+                        elif player.level == 1:
                             act("hide")
                     if game.actions_remaining:
                         if game.hidden and game.enemy_unaware:
@@ -102,16 +108,24 @@ def complete_class_adventure(class_id, seed, floors=5):
                     frontier.append((target, [*route, direction]))
         return None
 
-    def recover_if_needed():
+    def wizard_ready():
+        if class_id != "wizard":
+            return True
+        # Mage Armor uses one level-one slot; higher-level attack spells
+        # should be available before taking on the next unfamiliar foe.
+        return all(game.player.spell_slots.get(level, 0) >= maximum - (level == 1)
+                   for level, maximum in game.player.max_spell_slots.items())
+
+    def recover_if_needed(for_guardian=False):
         if game.over or not game.player.is_conscious:
             return
         player = game.player
         missing_health = player.hp < player.max_hp - 3
-        missing_slots = class_id == "wizard" and not player.spell_slots.get(1, 0)
+        missing_slots = not wizard_ready()
         if missing_health or (missing_slots and player.arcane_recovery_available):
             act("rest")
-        if (player.hp >= max(player.max_hp - 5, 5 + game.floor * 2)
-                and (class_id != "wizard" or player.spell_slots.get(1, 0))):
+        safe_health = player.max_hp if for_guardian else max(player.max_hp - 5, 5 + game.floor * 2)
+        if player.hp >= safe_health and wizard_ready():
             return
         route = safe_route_to_entrance()
         if route is None:
@@ -124,45 +138,94 @@ def complete_class_adventure(class_id, seed, floors=5):
         if class_id == "wizard":
             act("cast armor")
 
+    def careful_route(target):
+        """Prefer cleared passages, then fewer and weaker unavoidable foes."""
+        frontier = [(0, 0, game.position, [])]
+        cheapest = {}
+        while frontier:
+            risk, distance, position, route = heappop(frontier)
+            if position in cheapest:
+                continue
+            cheapest[position] = (risk, distance)
+            if position == target:
+                return risk, route
+            for direction, destination in game.dungeon.get_room(position).exits.items():
+                if destination == game.dungeon.boss_position and destination != target:
+                    continue
+                if destination in cheapest:
+                    continue
+                enemy = game.dungeon.get_room(destination).enemy
+                danger = 0 if enemy is None or not enemy.is_alive else 1000 + enemy.hp * enemy.armor_class
+                heappush(frontier, (risk + danger, distance + 1, destination,
+                                    [*route, direction]))
+        raise AssertionError(f"No route to {target}")
+
+    def shop_wisely():
+        act("sell all")
+        offers = {item.id: item for item in stock(game.floor, class_id)}
+        for kind in ("weapon", "armor"):
+            item_id = preferred_item_id(game.floor, class_id, kind)
+            act("buy " + item_id)
+            # A purchased item may be a deliberate tradeoff. Prefer the
+            # class's normal Vex blade or spell focus, without reducing its
+            # enchantment below a stronger find already worn.
+            current = (game.player.equipped_weapon if kind == "weapon"
+                       else game.player.equipped_armor)
+            desired = next((item for item in game.player.equipment_inventory
+                            if item.id == item_id), None)
+            if desired is not None and desired.bonus >= current.bonus:
+                act("equip " + item_id)
+            act("sell all")
+        for item in ("charm", "ward"):
+            act("buy " + item)
+        while game.player.potions < 5 and game.player.gold >= offers["potion"].price:
+            act("buy potion")
+        if game.player.gold >= offers["ember"].price:
+            act("buy ember")
+        if class_id == "wizard" and game.player.gold >= offers["mana"].price:
+            act("buy mana")
+
     act("skills")
     while not game.over:
         if class_id == "wizard":
             act("cast armor")
-        targets = [position for position in game.dungeon.rooms
-                   if position != game.dungeon.boss_position]
-        # A rare boss drop must never displace the safe, early weapon cache.
-        weapon_room = next((position for position, room in game.dungeon.rooms.items()
-                            if position != game.dungeon.boss_position
-                            and room.loot and room.loot.weapon_name), None)
-        if weapon_room is not None:
-            targets.remove(weapon_room)
-            targets.insert(0, weapon_room)
-        targets.append(game.dungeon.boss_position)
-        for target in targets:
-            for direction in route_to(game, target):
+        targets = {position for position in game.dungeon.rooms
+                   if position != game.dungeon.boss_position}
+        while targets and not game.over:
+            # Test automation knows the generated map and chooses safe
+            # rooms first. All movement, looting and recovery remain actual
+            # commands, and source-launcher replay uses the same command list.
+            target = min(targets, key=lambda position: (
+                careful_route(position)[0],
+                0 if game.dungeon.get_room(position).loot else 1,
+                len(careful_route(position)[1]), position))
+            while game.position != target and not game.over:
+                direction = careful_route(target)[1][0]
                 act(direction)
                 if game.enemy:
                     clear_room()
-                if game.over:
-                    break
+                    if not game.over:
+                        recover_if_needed()
             if game.over:
                 break
             clear_room()
-            if target != game.dungeon.boss_position:
-                recover_if_needed()
+            targets.remove(target)
+            recover_if_needed()
+        if not game.over:
+            recover_if_needed(for_guardian=True)
+            target = game.dungeon.boss_position
+            while game.position != target and not game.over:
+                act(careful_route(target)[1][0])
+                if game.enemy:
+                    clear_room()
+            if not game.over:
+                clear_room()
         if game.over:
             break
         if not game.floor_cleared:
             raise AssertionError("Exploring the floor did not defeat its guardian.")
         act("portal")
-        act("sell all")
-        for item in ("sword", "armor", "charm", "ward"):
-            act("buy " + item)
-        for _ in range(4):
-            act("buy potion")
-        act("buy ember")
-        if class_id == "wizard":
-            act("buy mana")
+        shop_wisely()
         act("journal")
         act("read")
         act("descend")
@@ -182,11 +245,15 @@ class ClassCampaignTests(unittest.TestCase):
                 self.assertEqual((game.floor, game.player.level), (5, 5))
                 self.assertEqual(len(game.journal), 20)
                 self.assertEqual(len({note.id for note in game.journal}), 20)
+                defeated = {line.removeprefix("You defeat ").split("!")[0]
+                            for line in transcript if line.startswith("You defeat ")}
+                self.assertEqual(defeated, set(MONSTERS_BY_NAME)
+                                 | {floor.guardian for floor in FLOORS})
                 self.assertEqual(game.player.second_wind_uses, 0)
                 self.assertFalse(game.player.action_surge_available)
                 self.assertIn(weapon, game.player.weapon_name)
-                self.assertGreaterEqual(game.player.weapon_bonus, 4)
-                self.assertGreaterEqual(game.player.armor_bonus, 4)
+                self.assertEqual(game.player.weapon_bonus, 3)
+                self.assertEqual(game.player.armor_bonus, 3)
                 self.assertGreaterEqual(game.player.gold, 0)
                 self.assertIn(evidence, "\n".join(transcript))
                 self.assertIn("Perception check:", "\n".join(transcript))
@@ -203,6 +270,38 @@ class ClassCampaignTests(unittest.TestCase):
                     self.assertIn("Opening Hide:", "\n".join(transcript))
                     self.assertIn("Your opening Hide attempt spends no action or bonus action.",
                                   "\n".join(transcript))
+
+    def test_all_classes_can_complete_the_campaign_without_any_equipment_drops(self):
+        """Earned gold and reliable shops suffice when gear rolls yield nothing."""
+        for class_id, seed in (("fighter", 0), ("rogue", 0), ("wizard", 1)):
+            with self.subTest(class_id=class_id):
+                generated_loot = []
+
+                def no_equipment(rng, floor, adventurer_class, source="cache"):
+                    # Retain the real loot rolls and every non-equipment
+                    # reward; suppress finds rather than adding resources.
+                    loot = replace(original_roll_room_loot(rng, floor, adventurer_class, source),
+                                   equipment=())
+                    generated_loot.append(loot)
+                    return loot
+
+                with patch("dungeon.roll_room_loot", side_effect=no_equipment):
+                    if class_id == "fighter":
+                        game, commands, transcript = complete_adventure(seed, floors=5)
+                    else:
+                        game, commands, transcript = complete_class_adventure(class_id, seed)
+                self.assertTrue(game.won, "\n".join(transcript[-20:]))
+                self.assertTrue(game.player.is_alive)
+                self.assertEqual(len(generated_loot), 55)
+                self.assertTrue(all(not loot.equipment for loot in generated_loot))
+                self.assertEqual(len(game.journal), 20)
+                self.assertEqual(game.player.weapon_bonus, 3)
+                self.assertEqual(game.player.armor_bonus, 3)
+                self.assertGreaterEqual(game.player.gold, 0)
+                self.assertTrue(any(line.startswith("Bought ") and " +3 for " in line
+                                    for line in transcript))
+                self.assertEqual(commands.count("portal"), 5)
+                self.assertEqual(commands.count("descend"), 5)
 
     def test_source_launcher_replays_both_complete_campaigns_outside_checkout(self):
         for class_id, seed in (("rogue", 0), ("wizard", 1)):

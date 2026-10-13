@@ -3,13 +3,9 @@
 from campaign import FLOORS
 from floor_lore import LORE
 from lore_notes import NOTES
-from collections import deque
 import random
 
-from loot_library import (
-    Loot, TREASURE_BUNDLES, ember_stone, mana_draught, rare_equipment,
-    suitable_weapon_name, valuable,
-)
+from loot_library import roll_room_loot
 from room import Room
 from room_library import make_floor_enemies, make_warden
 
@@ -134,74 +130,18 @@ class Dungeon:
         ]
         rng.shuffle(positions)
 
-        # Place the runeblade in a nearest room, giving every run an early upgrade.
-        distances = {self.start: 0}
-        frontier = deque([self.start])
-        while frontier:
-            position = frontier.popleft()
-            for destination in self.rooms[position].exits.values():
-                if destination not in distances:
-                    distances[destination] = distances[position] + 1
-                    frontier.append(destination)
-        weapon_position = min(positions, key=distances.__getitem__)
-        positions.remove(weapon_position)
-        self.rooms[weapon_position].loot = (TREASURE_BUNDLES[-1] if self.floor == 1
-                                                  else Loot(gold=12 * self.floor, potions=2))
-
-        treasures = list(TREASURE_BUNDLES[:-1])
-        rng.shuffle(treasures)
-        for position, treasure in zip(positions[:3], treasures):
-            self.rooms[position].loot = Loot(gold=treasure.gold * self.floor, potions=treasure.potions)
-        # Every floor has six native species, each encountered exactly once.
-        # Shuffle their placement while keeping repeated upper-floor foes out.
-        for position, enemy in zip(positions[3:], make_floor_enemies(rng, self.floor)):
+        # Four ordinary rooms remain safe; all six native foes appear once.
+        # Safe rooms have better loot chances, but can still contain no treasure.
+        for position, enemy in zip(positions[4:], make_floor_enemies(rng, self.floor)):
             self.rooms[position].enemy = enemy
         self.rooms[self.boss_position].enemy = make_warden()
-        # Generate extras only after the original placement and monster rolls.
-        # Loot variety therefore cannot alter this floor's layout or enemies.
-        self._enrich_treasure(rng, [weapon_position, *positions[:3]])
-
-    def _enrich_treasure(self, rng: random.Random, cache_positions: list[tuple[int, int]]) -> None:
-        extras = (
-            (valuable(self.floor),),
-            (valuable(self.floor, 1),),
-            (valuable(self.floor, 2), ember_stone()),
-            (valuable(self.floor, 3), mana_draught()),
-        )
-        for index, position in enumerate(cache_positions):
-            room = self.rooms[position]
-            original = room.loot
-            weapon_name = original.weapon_name
-            if weapon_name and self.class_id != "fighter":
-                weapon_name = suitable_weapon_name(self.class_id, original.weapon_bonus)
-            equipment = {}
-            # Keep the first-floor opening weapon guaranteed, with additional
-            # upgrades rare rather than giving every chamber another weapon.
-            guaranteed_weapon = index == 0 and self.floor == 1
-            if not guaranteed_weapon and rng.random() < 0.15:
-                equipment = rare_equipment(rng, self.floor, self.class_id)
-            room.loot = Loot(
-                gold=original.gold,
-                potions=original.potions,
-                weapon_name=equipment.get("weapon_name", weapon_name),
-                weapon_bonus=equipment.get("weapon_bonus", original.weapon_bonus),
-                items=extras[index],
-                armor_name=equipment.get("armor_name"),
-                armor_bonus=equipment.get("armor_bonus", 0),
-            )
-
-        for room in self.rooms.values():
-            if not room.enemy:
+        for position, room in self.rooms.items():
+            if position == self.start:
                 continue
-            items = ()
-            if rng.random() < 0.35:
-                kind = rng.randrange(6)
-                item = (valuable(self.floor, kind) if kind < 4 else
-                        ember_stone() if kind == 4 else mana_draught())
-                items = (item,)
-            equipment = rare_equipment(rng, self.floor, self.class_id) if rng.random() < 0.08 else {}
-            if items or equipment:
-                room.loot = Loot(items=items, **equipment)
+            source = ("guardian" if room.enemy and room.enemy.boss else
+                      "monster" if room.enemy else "cache")
+            loot = roll_room_loot(rng, self.floor, self.class_id, source)
+            room.loot = loot if loot.has_treasure else None
 
     def get_room(self, position: tuple[int, int]) -> Room:
         return self.rooms[position]
