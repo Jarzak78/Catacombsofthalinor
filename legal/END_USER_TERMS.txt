@@ -1,0 +1,45 @@
+WINDOWS MICROSOFT RUNTIME TERMS
+
+Scope
+
+The Windows build contains Microsoft Distributable Code used by its
+bundled Python runtime and native components. These terms apply only
+to that Microsoft Distributable Code. They do not select a license for
+the game itself or apply these restrictions to the game's separate
+code, story, artwork, Python itself, or other third-party material.
+They do not restrict the permissions granted for SRD material under
+CC BY 4.0 or rights granted by any other applicable license.
+
+Agreement
+
+By accepting these terms, you agree, with respect to the bundled
+Microsoft Distributable Code, that you will not:
+
+1. Alter any copyright, trademark, or patent notice in that code.
+2. Use Microsoft's trademarks in a program's name or in a way that
+   suggests the program comes from or is endorsed by Microsoft.
+3. Distribute that code to run on a platform other than Microsoft
+   operating systems, run-time technologies, or application platforms.
+4. Include that code in malicious, deceptive, or unlawful programs.
+
+If you further distribute a program containing that code, comply with
+the applicable Microsoft redistribution requirements and require
+distributors and external end users to agree to terms that protect the
+Microsoft Distributable Code at least as much as those requirements.
+Preserve the original applicable notices and these runtime terms with
+the Microsoft Distributable Code. Consult the applicable Microsoft
+documentation and license terms for the particular components when
+redistributing them; this summary is not a new grant of rights in them.
+
+Source and other licenses
+
+These terms pass through the conditions described in CPython's
+PC/crtlicense.txt for its Windows binary build. The original notice is
+retained in legal/runtime/Python-Windows-LICENSE.txt in the release.
+Source: https://github.com/python/cpython/blob/v3.12.10/PC/crtlicense.txt
+
+Separate permissions and notices for Python and the other bundled
+components remain applicable. For SRD attribution, adaptation details,
+and license links, see CREDITS.txt and legal/CC-BY-4.0.txt. Nothing in
+this agreement overrides those separate license grants or represents
+that a comprehensive legal clearance has been completed.
