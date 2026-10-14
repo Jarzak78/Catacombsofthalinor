@@ -32,6 +32,10 @@ PYTHON_LICENSE_MARKERS = (
     "Regents of the University of California",
     "Sun Microsystems",
 )
+ZLIB_LICENSE_MARKERS = (
+    "Jean-loup Gailly", "Mark Adler",
+    "This notice may not be removed or altered from any source distribution.",
+)
 
 
 def require_text(data: bytes, markers: tuple[str, ...], source: str) -> None:
@@ -70,8 +74,10 @@ def collect_notices(root: Path, destination: Path) -> Path:
     legal = root / "legal"
     if not credits.is_file() or not credits.read_bytes().strip():
         raise NoticeError("CREDITS.txt is required before building a distributable.")
-    if not (legal / "README.md").is_file():
-        raise NoticeError("legal/README.md and the project's license texts are required.")
+    for name in ("README.md", "CC-BY-4.0.txt", "END_USER_TERMS.txt"):
+        path = legal / name
+        if not path.is_file() or not path.read_bytes().strip():
+            raise NoticeError(f"legal/{name} is required before building a distributable.")
     if destination.exists():
         shutil.rmtree(destination)
     destination.mkdir(parents=True)
@@ -135,12 +141,12 @@ def collect_notices(root: Path, destination: Path) -> Path:
            f"PyInstaller {pyinstaller.version}; bootloader exception and runtime hooks")
     pyi_source = f"https://raw.githubusercontent.com/pyinstaller/pyinstaller/v{pyinstaller.version}/"
     zlib_url = pyi_source + "bootloader/zlib/LICENSE"
-    retain("PyInstaller-bootloader-zlib-LICENSE.txt", source_bytes(zlib_url, cache, (
-        "zlib", "Jean-loup Gailly", "Mark Adler")), zlib_url, "PyInstaller bootloader zlib")
+    retain("PyInstaller-bootloader-zlib-LICENSE.txt", source_bytes(zlib_url, cache,
+        ZLIB_LICENSE_MARKERS), zlib_url, "PyInstaller bootloader zlib")
     for name, url, markers in (
-        ("Apache-2.0.txt", "https://www.apache.org/licenses/LICENSE-2.0.txt",
+        ("Apache-2.0.txt", "https://raw.githubusercontent.com/apache/commons-lang/rel/commons-lang-3.17.0/LICENSE.txt",
          ("Apache License", "Version 2.0", "END OF TERMS AND CONDITIONS")),
-        ("GPL-2.0.txt", "https://www.gnu.org/licenses/old-licenses/gpl-2.0.txt",
+        ("GPL-2.0.txt", "https://raw.githubusercontent.com/python/cpython-source-deps/xz-5.2.5/COPYING.GPLv2",
          ("GNU GENERAL PUBLIC LICENSE", "Version 2, June 1991", "END OF TERMS AND CONDITIONS")),
     ):
         retain(name, source_bytes(url, cache, markers), url, "PyInstaller license text; see bootloader exception")

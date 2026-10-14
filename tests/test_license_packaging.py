@@ -9,7 +9,7 @@ import unittest
 from unittest.mock import patch
 
 from scripts.collect_licenses import (
-    NoticeError, PYTHON_LICENSE_MARKERS, audit_analysis, binary_component,
+    NoticeError, PYTHON_LICENSE_MARKERS, ZLIB_LICENSE_MARKERS, audit_analysis, binary_component,
     collect_notices, copy_notices, require_text, source_bytes, verify_embedded_notices,
 )
 
@@ -39,6 +39,7 @@ class NoticePackagingTests(unittest.TestCase):
             (root / "CREDITS.txt").write_bytes(b"Systems Reference Document attribution\n")
             (root / "legal" / "README.md").write_bytes(b"Project provenance\n")
             (root / "legal" / "CC-BY-4.0.txt").write_bytes(b"Creative Commons full text fixture\n")
+            (root / "legal" / "END_USER_TERMS.txt").write_bytes(b"Microsoft runtime-only terms fixture\n")
             python = Path(temporary) / "python"
             python.mkdir()
             installed = ("\r\n".join(PYTHON_LICENSE_MARKERS) + "\r\nCopyright \u00a9\r\n").encode()
@@ -86,9 +87,31 @@ class NoticePackagingTests(unittest.TestCase):
             (root / "CREDITS.txt").write_text("credits")
             (root / "legal").mkdir()
             (root / "legal/README.md").write_text("provenance")
+            (root / "legal/CC-BY-4.0.txt").write_text("CC BY full text fixture")
+            (root / "legal/END_USER_TERMS.txt").write_text("runtime-only terms fixture")
             with patch("scripts.collect_licenses.sys.base_prefix", str(root / "missing")):
                 with self.assertRaisesRegex(NoticeError, "Official Windows Python license"):
                     collect_notices(root, root / "build/bundle")
+
+    def test_zlib_notice_does_not_need_to_name_the_library(self):
+        # The actual PyInstaller 6.16 notice names its authors and conditions,
+        # but never says "zlib". Requiring that word broke the Windows build.
+        data = ("Jean-loup Gailly and Mark Adler\n"
+                "This notice may not be removed or altered from any source distribution.\n").encode()
+        self.assertNotIn(b"zlib", data)
+        require_text(data, ZLIB_LICENSE_MARKERS, "PyInstaller bootloader LICENSE")
+
+    def test_release_requires_cc_license_and_runtime_terms(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / "CREDITS.txt").write_text("credits")
+            (root / "legal").mkdir()
+            (root / "legal/README.md").write_text("provenance")
+            with self.assertRaisesRegex(NoticeError, "CC-BY-4.0.txt"):
+                collect_notices(root, root / "build/bundle")
+            (root / "legal/CC-BY-4.0.txt").write_text("license")
+            with self.assertRaisesRegex(NoticeError, "END_USER_TERMS.txt"):
+                collect_notices(root, root / "build/bundle")
 
     def test_unknown_native_libraries_require_review(self):
         root = Path("/python")
