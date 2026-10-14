@@ -8,6 +8,7 @@ from tkinter import messagebox, scrolledtext, ttk
 import traceback
 
 from character_creation import CLASS_NAMES, CLASS_SUMMARIES
+from credits import credits_text, notice_documents, runtime_terms_required, runtime_terms_text
 from entrance_art import TORCH_TAG, animate_torches, draw_entrance
 from presentation import TAG_COLORS, classify_message
 from ui_controller import DesktopSession, minimap_data
@@ -31,6 +32,9 @@ class DungeonWindow:
         self.screen = "title"
         self._torch_after_id = None
         self._torch_started_at = monotonic()
+        self._credits_window = None
+        self._runtime_terms_window = None
+        self._runtime_terms_accepted = not runtime_terms_required()
         self.history: list[str] = []
         self.history_index = 0
         self.map_state: dict = {}
@@ -127,7 +131,79 @@ class DungeonWindow:
         self.creation_button = ttk.Button(frame, text="Character Creation", style="Accent.TButton",
                                           command=self.open_creation)
         self.creation_button.grid(row=4, column=0, pady=(0, 14))
-        ttk.Button(frame, text="Exit", command=self.root.destroy).grid(row=5, column=0, pady=(0, 12))
+        footer = ttk.Frame(frame)
+        footer.grid(row=5, column=0, pady=(0, 12))
+        self.credits_button = ttk.Button(footer, text="Credits & Licenses", command=self.show_credits)
+        self.credits_button.pack(side="left", padx=(0, 12))
+        ttk.Button(footer, text="Exit", command=self.root.destroy).pack(side="left")
+
+    def show_credits(self) -> None:
+        if self._credits_window is not None and self._credits_window.winfo_exists():
+            self._credits_window.lift()
+            self._credits_window.focus_set()
+            return
+        content = credits_text()
+        window = self._credits_window = tk.Toplevel(self.root)
+        window.title("Credits & Licenses — Catacombs of Thalinor")
+        window.geometry("780x560")
+        window.minsize(440, 320)
+        window.configure(bg=BG)
+        window.transient(self.root)
+        panel = ttk.Frame(window, padding=18)
+        panel.pack(fill="both", expand=True)
+        ttk.Label(panel, text="Credits & Licenses", style="Section.TLabel").pack(anchor="w", pady=(0, 12))
+        documents = notice_documents()
+        selected = tk.StringVar(window, "CREDITS.txt")
+        self.credits_selector = ttk.Combobox(panel, textvariable=selected,
+                                            values=tuple(documents), state="readonly")
+        self.credits_selector.pack(fill="x", pady=(0, 10))
+        self.credits_body = scrolledtext.ScrolledText(
+            panel, wrap="word", bg=PANEL, fg=INK, insertbackground=INK,
+            font=("Segoe UI", 11), relief="flat", padx=12, pady=12)
+        self.credits_body.pack(fill="both", expand=True)
+        self.credits_body.insert("1.0", content)
+        self.credits_body.configure(state="disabled")
+        def select_notice(_event=None):
+            text = documents[selected.get()].read_text(encoding="utf-8")
+            self.credits_body.configure(state="normal")
+            self.credits_body.delete("1.0", "end")
+            self.credits_body.insert("1.0", text)
+            self.credits_body.configure(state="disabled")
+            self.credits_body.yview_moveto(0)
+        self.credits_selector.bind("<<ComboboxSelected>>", select_notice)
+        ttk.Button(panel, text="Close", command=window.destroy).pack(pady=(12, 0))
+        window.bind("<Escape>", lambda _event: window.destroy())
+
+    def show_runtime_terms(self) -> None:
+        if self._runtime_terms_window is not None and self._runtime_terms_window.winfo_exists():
+            self._runtime_terms_window.lift()
+            return
+        content = runtime_terms_text()
+        window = self._runtime_terms_window = tk.Toplevel(self.root)
+        window.title("Windows Runtime Terms")
+        window.geometry("780x560")
+        window.minsize(440, 320)
+        window.transient(self.root)
+        window.configure(bg=BG)
+        panel = ttk.Frame(window, padding=18)
+        panel.pack(fill="both", expand=True)
+        ttk.Label(panel, text="Windows Runtime Terms", style="Section.TLabel").pack(anchor="w", pady=(0, 12))
+        text = scrolledtext.ScrolledText(panel, wrap="word", bg=PANEL, fg=INK,
+                                        font=("Segoe UI", 11), relief="flat", padx=12, pady=12)
+        text.pack(fill="both", expand=True)
+        text.insert("1.0", content)
+        text.configure(state="disabled")
+        buttons = ttk.Frame(panel)
+        buttons.pack(fill="x", pady=(12, 0))
+        def accept():
+            self._runtime_terms_accepted = True
+            window.destroy()
+            self.open_creation()
+        self.runtime_accept_button = ttk.Button(buttons, text="Agree & Continue", command=accept)
+        self.runtime_accept_button.pack(side="right")
+        self.runtime_decline_button = ttk.Button(buttons, text="Decline", command=window.destroy)
+        self.runtime_decline_button.pack(side="right", padx=(0, 12))
+        window.bind("<Escape>", lambda _event: window.destroy())
 
     def _creation_screen(self) -> None:
         frame = self.frames["creation"]
@@ -292,6 +368,9 @@ class DungeonWindow:
         self.restart_button.pack(fill="x", pady=(4, 0))
 
     def open_creation(self) -> None:
+        if not self._runtime_terms_accepted:
+            self.show_runtime_terms()
+            return
         self.session.begin_creation()
         self.show_screen("creation")
         self.refresh_creation()
@@ -509,6 +588,39 @@ def run_gui_smoke(report_path: Path, name: str = "Adventurer", seed: int | None 
 
         assert app.screen == "title" and app.entrance_canvas.find_all()
         checks.append("title_screen")
+        title_state = app.session.get_state()
+        app.credits_button.invoke()
+        root.update()
+        dialog = app._credits_window
+        assert dialog.winfo_viewable() and app.credits_body.get("1.0", "end").strip() == credits_text()
+        assert "System Reference Document" in app.credits_body.get("1.0", "end")
+        app.credits_selector.set("legal/CC-BY-4.0.txt")
+        app.credits_selector.event_generate("<<ComboboxSelected>>")
+        root.update()
+        assert "Section 8" in app.credits_body.get("1.0", "end")
+        app.credits_button.invoke()
+        assert app._credits_window is dialog, "Reopening credits must reuse its window."
+        dialog.destroy()
+        root.update()
+        assert app.session.get_state() == title_state
+        checks.append("credits")
+        # Exercise the same acceptance controls in source and Windows packages.
+        app._runtime_terms_accepted = False
+        app.creation_button.invoke()
+        root.update()
+        assert app.screen == "title" and app._runtime_terms_window.winfo_viewable()
+        app.runtime_decline_button.invoke()
+        root.update()
+        assert app.screen == "title" and not app._runtime_terms_accepted
+        assert app.session.get_state() == title_state
+        app.creation_button.invoke()
+        root.update()
+        app.runtime_accept_button.invoke()
+        root.update()
+        assert app.screen == "creation" and app._runtime_terms_accepted
+        app.back_button.invoke()
+        root.update()
+        checks.append("runtime_terms")
         canvas = app.entrance_canvas
         def art_state(items):
             return {item: (canvas.coords(item), canvas.itemcget(item, "fill"))
@@ -577,6 +689,12 @@ def run_gui_smoke(report_path: Path, name: str = "Adventurer", seed: int | None 
         assert "> look" in app.terminal.get("1.0", "end") and app.session.game.get_state() == before
         assert_text_tag("> look", "command")
         checks.append("command_submission")
+        credits_rng = app.session.game.rng.getstate()
+        app.command_var.set("credits")
+        app.send_button.invoke()
+        root.update()
+        assert "https://creativecommons.org/licenses/by/4.0/legalcode" in app.terminal.get("1.0", "end")
+        assert app.session.game.get_state() == before and app.session.game.rng.getstate() == credits_rng
         initial_map = app.map_state
         assert sum(node["marker"] == "?" for node in initial_map["nodes"]) == 11
         assert sum(node["marker"] == "@" for node in initial_map["nodes"]) == 1

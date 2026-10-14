@@ -1,0 +1,48 @@
+CATACOMBS OF THALINOR — CREDITS AND LICENSE NOTICES
+
+An independent solo dungeon game with adapted fifth-edition rules.
+
+RULES REFERENCE ATTRIBUTION
+
+This work includes material from the System Reference Document 5.2 (“SRD 5.2”) by Wizards of the Coast LLC, available at https://www.dndbeyond.com/srd. The SRD 5.2 is licensed under the Creative Commons Attribution 4.0 International License, available at https://creativecommons.org/licenses/by/4.0/legalcode.
+
+This work includes material from the System Reference Document 5.2.1 (“SRD 5.2.1”) by Wizards of the Coast LLC, available at https://www.dndbeyond.com/srd. The SRD 5.2.1 is licensed under the Creative Commons Attribution 4.0 International License, available at https://creativecommons.org/licenses/by/4.0/legalcode.
+
+CHANGES TO REFERENCED MATERIAL
+
+Selected class features, spells, equipment profiles, and combat concepts
+are adapted and simplified for a solo computer game. SRD 5.2 was the
+project's original cited reference; shared material was also reviewed
+against SRD 5.2.1. This is not a complete implementation of either SRD.
+
+Changes include a room-based campaign, immediate death at zero HP,
+hidden-only Sneak Attack, DC 20 hiding, opening encounter and ambush
+rules, humorous critical-failure self-damage, five armor slots, capped
+combined armor enchantments, randomized loot, altered prices, and
+custom magical buffs and supplies. Descriptions and instructions have
+been rewritten for this game's interface. The campaign's setting,
+characters, lore, monster roster, and treasure probabilities were
+developed for this project rather than copied from an SRD adventure.
+
+The full CC BY 4.0 legal code is included in legal/CC-BY-4.0.txt.
+Its Section 5 contains a disclaimer of warranties and limitation of
+liability applicable to the licensed material. Keep the attribution,
+license reference, and change notice with redistributed SRD material.
+The license does not grant trademark rights or imply endorsement.
+
+SOFTWARE AND OTHER MATERIAL
+
+The packaged game includes Python and, in the desktop edition, Tcl/Tk.
+The Windows download's legal/ folder includes third-party notices
+collected from the build environment. Keep that folder with the game.
+The Microsoft runtime terms in legal/runtime/Python-Windows-LICENSE.txt
+apply to those runtime components; they do not relicense the game's
+separate code or creative content, or restrict the SRD license grant.
+The packaged Windows launchers show legal/END_USER_TERMS.txt and ask
+for acceptance before play. Credits remain available without accepting.
+See legal/README.md for the source record and maintenance guidance.
+
+These notices identify third-party permissions. They do not select a
+license for the separate project-specific code, story, or artwork, or
+limit recipients' rights in the licensed SRD material. No blanket claim
+of exclusive copyright or completed legal clearance is made here.

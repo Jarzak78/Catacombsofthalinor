@@ -11,6 +11,8 @@ on:
       - '**.py'
       - '**.ps1'
       - requirements-build.txt
+      - CREDITS.txt
+      - legal/**
       - .github/workflows/windows-exe.yml
 
 permissions:
@@ -60,5 +62,8 @@ jobs:
           path: |
             dist/CatacombsOfThalinor.exe
             dist/CatacombsOfThalinor-Terminal.exe
+            dist/CREDITS.txt
+            dist/legal/
+            dist/build-manifest.json
           if-no-files-found: error
           retention-days: 30

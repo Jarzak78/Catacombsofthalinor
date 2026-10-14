@@ -76,6 +76,11 @@ def main() -> int:
          ("Adventurer's clue:",), 0),
         ("commands and quit", 7, ["--quick-start"], "help\nstats\nquit\n",
          ("You leave the trial for another day",), 0),
+        ("credits before character creation", 7, ["--credits"], "",
+         ("System Reference Document", "https://creativecommons.org/licenses/by/4.0/legalcode"), 0),
+        ("credits during an adventure", 7, ["--quick-start"], "credits\nlicenses\nquit\n",
+         ("System Reference Document", "https://creativecommons.org/licenses/by/4.0/legalcode",
+          "You leave the trial for another day"), 0),
         ("closed input", 7, ["--quick-start"], "",
          ("You leave the trial for another day",), 0),
         ("Rogue character creation", 7, [], "rogue\naccept\nskills\nstats\nquit\n",
@@ -112,7 +117,7 @@ def main() -> int:
     with TemporaryDirectory(prefix="thalinor-smoke-") as working_directory:
         for name, seed, options, command_text, expected, roll_blocks in scenarios:
             result = subprocess.run(
-                [str(executable), "--name", "Tarin", "--seed", str(seed), "--floors", "5", *options],
+                [str(executable), "--accept-runtime-terms", "--name", "Tarin", "--seed", str(seed), "--floors", "5", *options],
                 cwd=working_directory, input=command_text, text=True,
                 capture_output=True, timeout=90,
             )

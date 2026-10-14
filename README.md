@@ -7,10 +7,17 @@ use portals to shop for upgrades before facing the Hollow King.
 
 A turn-based dungeon crawler with desktop and terminal interfaces,
 **Warrior, Rogue, and Wizard** adventurers, rolled starting abilities,
-and combat inspired by the revised
-2024 D&D 5e rules. Classes use the simplified abilities described below;
-the story, monsters, treasure, and dungeon rulings are original. This
+and combat adapted from selected fifth-edition SRD rules. Classes use the
+simplified abilities described below; the campaign's story, monster roster,
+treasure probabilities, and dungeon rulings were developed for this project. This
 game's death rule is immediate: reaching zero HP ends the adventurer's run.
+
+See [CREDITS.txt](CREDITS.txt) for the required SRD attribution and adaptation
+notice, and [legal/README.md](legal/README.md) for content provenance and
+third-party license information. Those notices cover the identified
+third-party material; the owner has not selected a general license for the
+separate project-specific code, story, or artwork. This is an independent
+game and claims no official status.
 
 ## Play
 
@@ -38,6 +45,15 @@ gameplay stops. When the adventure ends, its text remains visible and
 **New Adventure** lets you start another character.
 
 Python and Tk are bundled, so you do not need to install Python or VS Code.
+Keep the included **CREDITS.txt** and **legal** folder with either executable
+when copying or sharing the game. Credits are also available from the game's
+**Credits** option or either launcher's `--credits` command-line option.
+The packaged Windows launchers ask you to accept the included
+[Microsoft runtime terms](legal/END_USER_TERMS.txt) before play. Those
+terms concern only the bundled Microsoft components and do not relicense
+the game's separate content, Python, or the SRD material. The terminal
+option `--accept-runtime-terms` supplies explicit acceptance for automated
+play; credits can be viewed without accepting.
 The same ZIP also includes **CatacombsOfThalinor-Terminal.exe** for the
 original console interface. That version waits for Enter before closing
 after quitting, winning, or dying; the finished adventure cannot continue
@@ -360,8 +376,13 @@ Cleared rooms allow uninterrupted short
 rests; the entrance allows long rests. Time is simulated, and monsters
 do not respawn. These are explicit dungeon rules and scope choices.
 
-The 2024 rules reference is the official [System Reference Document 5.2](https://www.dndbeyond.com/srd).
-The README describes the implemented mechanics in original wording.
+The original rules reference was the official System Reference Document
+5.2; shared material was also reviewed against SRD 5.2.1. Both are available
+from the [official SRD page](https://www.dndbeyond.com/srd) under CC BY 4.0.
+This game adapts selected material and does not implement either complete
+ruleset. [CREDITS.txt](CREDITS.txt) contains the exact attribution statements
+and an explanation of the changes. The README describes the implemented
+mechanics in wording written for this project.
 
 ## Develop and test
 
@@ -507,9 +528,9 @@ Victory is not declared until you choose to leave the final vendor.
 
 ## Equipment, treasure, and rarity
 
-Weapons and armor use familiar D&D-style profiles, with mundane and +1/+2/+3
+Weapons and armor use adapted fifth-edition SRD profiles, with mundane and +1/+2/+3
 versions. The loot tables are self-authored for this game, rather than
-reproductions of official D&D tables. Campaign gold prices, wizard vestments,
+reproductions of the SRD treasure tables. Campaign gold prices, wizard vestments,
 and the Arcane Staff's spell bonuses are homebrew adaptations for solo play.
 
 | Class | Weapon options | Torso armor or clothing options |

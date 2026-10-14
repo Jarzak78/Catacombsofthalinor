@@ -4,6 +4,7 @@ from dataclasses import asdict, replace
 from actions import Action
 from battle_flavor import hit_description, miss_description
 from campaign import FLOORS, preferred_item_id, sanctuary_dialogue, shop_items, stock
+from credits import credits_lines
 from equipment import DEFAULT_ARMOR, DEFAULT_WEAPONS, EQUIPMENT, make_equipment, resolve_equipment_id
 from lore_notes import LoreNote
 from loot_flavor import (
@@ -33,7 +34,7 @@ Portal: portal (after guardian), menu, shop <category> [page], buy <item id or n
 Equipment: inventory, equip <item id or name> (safe room), sell <item id>/sell all (vendor)
 Classes: skills, hide (Rogue), cast <spell> (Wizard), strike (weapon attack)
 Magic items: ember (action, 3d6 damage), mana (bonus action, restores one level-1 slot)
-Other: stats, inventory (i), help (h), quit (q)
+Other: stats, inventory (i), credits (licenses), help (h), quit (q)
 
 Attacks: d20 + attack bonus vs Armor Class. Natural 1 critically fails for 1 self-damage; 20 crits.
 A miss within 1–2 points of AC gets near-miss narration but deals no damage.
@@ -69,6 +70,7 @@ ALIASES = {
     "wind": "second wind", "surge": "action surge", "save": "end",
     "i": "inventory", "h": "help", "?": "help", "q": "quit",
     "short rest": "rest",
+    "licenses": "credits",
     "inspect": "examine", "examine foe": "examine", "examine enemy": "examine",
 }
 DIRECTIONS = {"north", "south", "east", "west"}
@@ -127,7 +129,7 @@ class Game:
             "Explore, gather supplies, and grow stronger before challenging him.",
             "Type 'help' for commands. Your starting pack holds three healing potions.",
             "Search with 'loot' for notes as well as treasure. Use 'journal' and 'read 1' to read them.",
-            "Combat uses D&D-inspired rules; 'skills' explains your class. Type 'end' to finish your turn.",
+            "Combat adapts SRD-based 5e rules; 'skills' explains your class. Type 'end' to finish your turn.",
             "", self.dungeon.lore.arrival, "", *self.describe_room(),
         ]
 
@@ -234,6 +236,8 @@ class Game:
 
     def perform(self, action: Action) -> list[str]:
         """Execute a device-independent action; GUIs call this directly."""
+        if action.kind in ("credits", "licenses") and not action.argument:
+            return credits_lines()
         # Journal inspection is informational in every scene, even after victory.
         if action.kind == "journal" and not action.argument:
             return self.journal_lines()

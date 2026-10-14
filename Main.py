@@ -7,6 +7,7 @@ import sys
 import traceback
 
 from character_creation import canonical_class, select_character
+from credits import credits_text, runtime_terms_required, runtime_terms_text
 from game import Game
 from presentation import print_messages
 from title_screen import title_screen
@@ -21,7 +22,32 @@ def main() -> None:
                         help="choose a class before rolling your starting ability scores")
     parser.add_argument("--quick-start", action="store_true",
                         help="skip character creation and use the selected class's preset ability scores")
+    parser.add_argument("--credits", action="store_true",
+                        help="show credits and license information without starting an adventure")
+    parser.add_argument("--accept-runtime-terms", action="store_true",
+                        help="agree to the bundled Microsoft runtime terms for Windows packaged play")
+    parser.add_argument("--runtime-terms", action="store_true",
+                        help="read the Windows runtime terms without starting an adventure")
     args = parser.parse_args()
+    if args.credits:
+        print(credits_text())
+        return
+    if args.runtime_terms:
+        print(runtime_terms_text())
+        return
+    if runtime_terms_required() and not args.accept_runtime_terms:
+        print(runtime_terms_text())
+        if sys.stdin is None or not sys.stdin.isatty():
+            print("\nRead the runtime terms with --runtime-terms or in legal/END_USER_TERMS.txt. "
+                  "To agree for this launch, use --accept-runtime-terms.")
+            return
+        try:
+            agreed = input("\nType ACCEPT to agree to these runtime-only terms and play: ").strip()
+        except (EOFError, KeyboardInterrupt):
+            return
+        if agreed.upper() != "ACCEPT":
+            print("The adventure has not started.")
+            return
     name = args.name.strip() or "Adventurer"
     print("\n".join(title_screen(shutil.get_terminal_size(fallback=(80, 25)).columns)))
     try:
