@@ -2,12 +2,13 @@
 
 import json
 from pathlib import Path
+from time import monotonic
 import tkinter as tk
 from tkinter import messagebox, scrolledtext, ttk
 import traceback
 
 from character_creation import CLASS_NAMES, CLASS_SUMMARIES
-from entrance_art import draw_entrance
+from entrance_art import TORCH_TAG, animate_torches, draw_entrance
 from presentation import TAG_COLORS, classify_message
 from ui_controller import DesktopSession, minimap_data
 
@@ -28,6 +29,8 @@ class DungeonWindow:
         self.session = session or DesktopSession()
         self.seed, self.floors = self.session.seed, self.session.floors
         self.screen = "title"
+        self._torch_after_id = None
+        self._torch_started_at = monotonic()
         self.history: list[str] = []
         self.history_index = 0
         self.map_state: dict = {}
@@ -35,6 +38,7 @@ class DungeonWindow:
         root.geometry("1180x820")
         root.minsize(960, 740)
         root.configure(bg=BG)
+        root.bind("<Destroy>", self._on_destroy, add="+")
         self._styles()
         self.body = ttk.Frame(root, padding=24)
         self.body.pack(fill="both", expand=True)
@@ -78,8 +82,34 @@ class DungeonWindow:
         style.map("Treeview", background=[("selected", "#354b60")])
 
     def show_screen(self, scene: str) -> None:
+        self._stop_title_animation()
         self.screen = scene
         self.frames[scene].tkraise()
+        if scene == "title":
+            self._animate_title_torches()
+
+    def _stop_title_animation(self) -> None:
+        if self._torch_after_id is not None:
+            self.root.after_cancel(self._torch_after_id)
+            self._torch_after_id = None
+
+    def _on_destroy(self, event) -> None:
+        if event.widget is self.root:
+            self._stop_title_animation()
+
+    def _animate_title_torches(self) -> None:
+        self._torch_after_id = None
+        if self.screen != "title":
+            return
+        animate_torches(self.entrance_canvas, self.entrance_canvas.winfo_width(),
+                        self.entrance_canvas.winfo_height(),
+                        monotonic() - self._torch_started_at)
+        self._torch_after_id = self.root.after(80, self._animate_title_torches)
+
+    def _redraw_entrance(self, event) -> None:
+        draw_entrance(self.entrance_canvas, event.width, event.height)
+        animate_torches(self.entrance_canvas, event.width, event.height,
+                        monotonic() - self._torch_started_at)
 
     def _title_screen(self) -> None:
         frame = self.frames["title"]
@@ -91,8 +121,7 @@ class DungeonWindow:
                   anchor="center").grid(row=1, column=0, pady=(0, 20), sticky="ew")
         self.entrance_canvas = tk.Canvas(frame, bg=BG, highlightthickness=0, height=400)
         self.entrance_canvas.grid(row=2, column=0, sticky="nsew")
-        self.entrance_canvas.bind("<Configure>", lambda event: draw_entrance(
-            self.entrance_canvas, event.width, event.height))
+        self.entrance_canvas.bind("<Configure>", self._redraw_entrance)
         ttk.Label(frame, text="Choose an adventurer. Descend into five forgotten depths.",
                   style="Muted.TLabel", anchor="center").grid(row=3, column=0, pady=(20, 12), sticky="ew")
         self.creation_button = ttk.Button(frame, text="Character Creation", style="Accent.TButton",
@@ -480,8 +509,32 @@ def run_gui_smoke(report_path: Path, name: str = "Adventurer", seed: int | None 
 
         assert app.screen == "title" and app.entrance_canvas.find_all()
         checks.append("title_screen")
+        canvas = app.entrance_canvas
+        def art_state(items):
+            return {item: (canvas.coords(item), canvas.itemcget(item, "fill"))
+                    for item in items}
+        torch_ids = canvas.find_withtag(TORCH_TAG)
+        assert len(torch_ids) == 18 and app._torch_after_id is not None
+        all_ids = canvas.find_all()
+        static_ids = set(all_ids).difference(torch_ids)
+        flames_before, static_before = art_state(torch_ids), art_state(static_ids)
+        stat_rng_before = app.session.stat_rng.getstate()
+        frame_ready = tk.BooleanVar(root, False)
+        root.after(240, lambda: frame_ready.set(True))
+        root.wait_variable(frame_ready)
+        assert art_state(torch_ids) != flames_before, "The scheduled torch frame did not change."
+        assert canvas.find_all() == all_ids and art_state(static_ids) == static_before
+        assert app.session.stat_rng.getstate() == stat_rng_before
         app.creation_button.invoke()
         root.update()
+        assert app._torch_after_id is None, "Torches must pause outside the title."
+        app.back_button.invoke()
+        root.update()
+        assert app.screen == "title" and app._torch_after_id is not None
+        app.creation_button.invoke()
+        root.update()
+        assert app._torch_after_id is None and app.session.stat_rng.getstate() == stat_rng_before
+        checks.append("torch_flicker")
         assert app.screen == "creation" and app.session.rolls is None
         assert app.enter_button.instate(["disabled"])
         checks.append("character_creation")

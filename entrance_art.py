@@ -9,6 +9,68 @@ from math import cos, pi, sin
 
 
 ART_TAG = "entrance-art"
+TORCH_TAG = "entrance-torches"
+
+
+def _blend_color(dim: str, bright: str, amount: float) -> str:
+    channels = (round(int(dim[i:i + 2], 16) * (1 - amount)
+                      + int(bright[i:i + 2], 16) * amount)
+                for i in (1, 3, 5))
+    return "#" + "".join(f"{channel:02x}" for channel in channels)
+
+
+def _torch_shapes(index: int, elapsed: float):
+    """Small, smooth variations, independent of character and combat rolls."""
+    x = (284, 716)[index]
+    phase = index * 2.37
+    flicker = (0.55 * sin(elapsed * 4.1 + phase)
+               + 0.30 * sin(elapsed * 9.7 + phase * 1.3)
+               + 0.15 * sin(elapsed * 17.3 + phase * 0.7))
+    sway = 2.2 * sin(elapsed * 7.7 + phase) + 1.1 * sin(elapsed * 13.1 + phase)
+    brightness = (1 + flicker) / 2
+    halos = ((46, "#354034", "#414a39"), (35, "#444532", "#54523a"),
+             (24, "#5c4c33", "#705b3d"), (15, "#7d5d35", "#997343"))
+    for layer, (radius, dim, bright) in enumerate(halos):
+        radius *= 1 + 0.05 * flicker
+        cx, cy = x + sway * 0.2, 174 + flicker * 0.6
+        yield ("oval", f"torch-{index}-halo-{layer}",
+               (cx - radius, cy - radius, cx + radius, cy + radius),
+               _blend_color(dim, bright, brightness))
+    flames = (
+        ((-12, 190, -6, 178, -8, 163, 1, 151, 4, 167, 10, 159,
+          13, 179, 8, 195, -8, 197), "#bf7930", "#df9b43"),
+        ((-6, 190, -3, 176, 2, 165, 3, 180, 8, 180, 5, 196, -3, 197),
+         "#e5a646", "#facb6a"),
+        ((-2, 194, 0, 183, 3, 193, 2, 199), "#ffd58b", "#ffedb7"),
+    )
+    for layer, (points, dim, bright) in enumerate(flames):
+        coords = []
+        for px, py in zip(points[::2], points[1::2]):
+            tip_weight = max(0, (197 - py) / 46)
+            coords.extend((x + px * (1 + 0.08 * flicker) + sway * tip_weight,
+                           197 + (py - 197) * (1 + 0.10 * flicker)))
+        yield ("polygon", f"torch-{index}-flame-{layer}", coords,
+               _blend_color(dim, bright, brightness))
+    for ember in range(2):
+        rise = (elapsed * (20 + ember * 7) + index * 12 + ember * 19) % 40
+        cx = x + (9 if ember == 0 else -4) + 3 * sin(elapsed * 2.9 + phase + ember)
+        cy = 162 - rise
+        color = _blend_color("#514831", "#e5b75c", 1 - rise / 40)
+        yield ("oval", f"torch-{index}-ember-{ember}",
+               (cx - 1, cy - 1, cx + 1, cy + 1), color)
+
+
+def animate_torches(canvas, width: float, height: float, elapsed: float) -> None:
+    """Update existing torch shapes without rebuilding the static illustration."""
+    if width <= 0 or height <= 0:
+        return
+    sx, sy = width / 1000, height / 400
+    for index in range(2):
+        for _, tag, points, color in _torch_shapes(index, elapsed):
+            coords = [value * (sx if i % 2 == 0 else sy)
+                      for i, value in enumerate(points)]
+            canvas.coords(tag, *coords)
+            canvas.itemconfigure(tag, fill=color)
 
 
 def draw_entrance(canvas, width: float, height: float) -> None:
@@ -23,12 +85,12 @@ def draw_entrance(canvas, width: float, height: float) -> None:
         return
     sx, sy = width / 1000, height / 400
 
-    def polygon(points, fill, outline="", line_width=1):
+    def polygon(points, fill, outline="", line_width=1, tags=()):
         coords = [value * (sx if index % 2 == 0 else sy)
                   for index, value in enumerate(points)]
         canvas.create_polygon(*coords, fill=fill, outline=outline,
                               width=max(1, line_width * min(sx, sy)),
-                              tags=(ART_TAG,))
+                              tags=(ART_TAG, *tags))
 
     def rectangle(x1, y1, x2, y2, fill, outline="", line_width=1):
         canvas.create_rectangle(x1 * sx, y1 * sy, x2 * sx, y2 * sy,
@@ -36,11 +98,11 @@ def draw_entrance(canvas, width: float, height: float) -> None:
                                 width=max(1, line_width * min(sx, sy)),
                                 tags=(ART_TAG,))
 
-    def oval(x1, y1, x2, y2, fill, outline="", line_width=1):
+    def oval(x1, y1, x2, y2, fill, outline="", line_width=1, tags=()):
         canvas.create_oval(x1 * sx, y1 * sy, x2 * sx, y2 * sy,
                            fill=fill, outline=outline,
                            width=max(1, line_width * min(sx, sy)),
-                           tags=(ART_TAG,))
+                           tags=(ART_TAG, *tags))
 
     def line(points, fill, line_width=1):
         coords = [value * (sx if index % 2 == 0 else sy)
@@ -165,24 +227,20 @@ def draw_entrance(canvas, width: float, height: float) -> None:
                  "", "#3d484f", 1.2)
 
     # Torches are painted from dark halo to bright core; no bitmap assets.
-    for x in (284, 716):
-        for radius, color in ((46, "#394438"), (35, "#4b4b36"),
-                              (24, "#655438"), (15, "#8b683c")):
-            oval(x - radius, 174 - radius, x + radius, 174 + radius, color)
+    for index, x in enumerate((284, 716)):
+        shapes = list(_torch_shapes(index, 0))
+        for _, tag, points, color in shapes[:4]:
+            oval(*points, color, tags=(TORCH_TAG, tag))
         polygon((x - 17, 231, x - 17, 240, x + 17, 240,
                  x + 17, 231), "#202b32", "#56606a")
         line((x, 239, x, 214, x - 9, 205), "#161f25", 6)
         polygon((x - 7, 195, x + 7, 195, x + 4, 225,
                  x - 4, 225), "#564532", "#242b2b")
-        polygon((x - 12, 190, x - 6, 178, x - 8, 163,
-                 x + 1, 151, x + 4, 167, x + 10, 159,
-                 x + 13, 179, x + 8, 195, x - 8, 197), "#d18c3a")
-        polygon((x - 6, 190, x - 3, 176, x + 2, 165,
-                 x + 3, 180, x + 8, 180, x + 5, 196,
-                 x - 3, 197), "#efb653")
-        polygon((x - 2, 194, x, 183, x + 3, 193, x + 2, 199), "#ffe1a1")
-        oval(x + 9, 153, x + 11, 155, "#d7a64a")
-        oval(x - 5, 144, x - 3, 146, "#a77b3b")
+        for kind, tag, points, color in shapes[4:]:
+            if kind == "polygon":
+                polygon(points, color, tags=(TORCH_TAG, tag))
+            else:
+                oval(*points, color, tags=(TORCH_TAG, tag))
 
     # Foreground paving guides the eye toward the light and the dark stairs.
     polygon((0, 339, 182, 304, 320, 310, 364, 307, 636, 307,

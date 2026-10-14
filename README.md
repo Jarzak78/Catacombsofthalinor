@@ -23,7 +23,7 @@ game's death rule is immediate: reaching zero HP ends the adventurer's run.
 4. Extract the ZIP and double-click **CatacombsOfThalinor.exe**.
 
 The main executable opens a desktop window. Its title screen depicts the
-catacomb entrance and has a **Character Creation** button. Choose a class,
+catacomb entrance with softly flickering torches and has a **Character Creation** button. Choose a class,
 roll your abilities, and accept your character before clicking **Enter the
 Dungeon**. The adventure screen keeps a scrolling text terminal on the
 left, with a minimap in the upper-right corner and your character's status
