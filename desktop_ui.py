@@ -10,6 +10,8 @@ import traceback
 from character_creation import CLASS_NAMES, CLASS_SUMMARIES
 from credits import credits_text, notice_documents, runtime_terms_required, runtime_terms_text
 from entrance_art import TORCH_TAG, animate_torches, draw_entrance
+from dungeon_view import VIEW_TAG, draw_dungeon_view
+from view_model import first_person_data
 from presentation import TAG_COLORS, classify_message
 from ui_controller import DesktopSession, minimap_data
 
@@ -38,6 +40,10 @@ class DungeonWindow:
         self.history: list[str] = []
         self.history_index = 0
         self.map_state: dict = {}
+        self.view_state: dict = {}
+        self.view_facing = "north"
+        self._view_location = None
+        self._view_game = None
         root.title("Catacombs of Thalinor")
         root.geometry("1180x820")
         root.minsize(960, 740)
@@ -287,15 +293,36 @@ class DungeonWindow:
         left = ttk.Frame(play)
         left.grid(row=0, column=0, sticky="nsew", padx=(0, 18))
         left.columnconfigure(0, weight=1)
-        left.rowconfigure(0, weight=1)
+        left.rowconfigure(0, weight=2, minsize=180)
+        left.rowconfigure(1, weight=3, minsize=160)
+        view_frame = ttk.Frame(left)
+        view_frame.grid(row=0, column=0, sticky="nsew", pady=(0, 10))
+        view_frame.columnconfigure(0, weight=1)
+        view_frame.rowconfigure(1, weight=1)
+        view_header = ttk.Frame(view_frame)
+        view_header.grid(row=0, column=0, sticky="ew", pady=(0, 6))
+        ttk.Label(view_header, text="FIRST PERSON", style="Section.TLabel").pack(side="left")
+        self.turn_right_button = ttk.Button(view_header, text="Turn Right", style="Compact.TButton",
+                                             command=lambda: self.turn_view(1))
+        self.turn_right_button.pack(side="right")
+        self.turn_left_button = ttk.Button(view_header, text="Turn Left", style="Compact.TButton",
+                                            command=lambda: self.turn_view(-1))
+        self.turn_left_button.pack(side="right", padx=(0, 6))
+        self.view_canvas = tk.Canvas(view_frame, width=650, height=220, bg="#080e15",
+                                     highlightthickness=1, highlightbackground="#34495a")
+        self.view_canvas.grid(row=1, column=0, sticky="nsew")
+        self.view_canvas.bind("<Configure>", lambda _event: self.draw_view())
+        self.view_caption = tk.StringVar(value="Your view of the dungeon")
+        ttk.Label(view_frame, textvariable=self.view_caption, style="Muted.TLabel",
+                  wraplength=680).grid(row=2, column=0, sticky="w", pady=(4, 0))
         self.terminal = scrolledtext.ScrolledText(left, bg="#080e15", fg=INK,
             insertbackground=GOLD, font=MONO, wrap="word", relief="flat", borderwidth=0,
-            padx=14, pady=12, state="disabled", width=66, height=25)
-        self.terminal.grid(row=0, column=0, sticky="nsew")
+            padx=14, pady=12, state="disabled", width=66, height=14)
+        self.terminal.grid(row=1, column=0, sticky="nsew")
         for tag, color in TAG_COLORS.items():
             self.terminal.tag_configure(tag, foreground=color)
         input_row = ttk.Frame(left)
-        input_row.grid(row=1, column=0, sticky="ew", pady=(12, 0))
+        input_row.grid(row=2, column=0, sticky="ew", pady=(12, 0))
         input_row.columnconfigure(1, weight=1)
         ttk.Label(input_row, text=">").grid(row=0, column=0, padx=(0, 8))
         self.command_var = tk.StringVar()
@@ -309,7 +336,7 @@ class DungeonWindow:
         self.command_hint = ttk.Label(left,
             text="Type a command and press Enter. 'help' lists commands; 'skills' explains your abilities.",
             style="Muted.TLabel", wraplength=760)
-        self.command_hint.grid(row=2, column=0, sticky="w", pady=(8, 0))
+        self.command_hint.grid(row=3, column=0, sticky="w", pady=(8, 0))
         right = ttk.Frame(play)
         right.grid(row=0, column=1, sticky="nsew")
         ttk.Label(right, text="MINIMAP", style="Section.TLabel").pack(anchor="w")
@@ -471,6 +498,7 @@ class DungeonWindow:
         self.status_var.set(f"{p['name']} · {state['class_name']} {p['level']} · Floor {state['floor']}/{state['total_floors']}"
                             f" · HP {p['hp']}/{p['max_hp']} · AC {state['armor_class']} · Gold {p['gold']}"
                             + (" · Adventure ended" if state["over"] else ""))
+        self.refresh_view(state)
         self.map_state = minimap_data(state)
         self.map_label.set(self.map_state["label"])
         self.draw_map()
@@ -501,6 +529,47 @@ class DungeonWindow:
         for direction, button in self.movement_buttons.items():
             button.configure(state="normal" if state["scene"] == "dungeon" and not state["over"]
                              and direction in current.get("exits", {}) else "disabled")
+
+    def refresh_view(self, state: dict) -> None:
+        position = tuple(state.get("position", ()))
+        location = (state.get("floor"), state.get("scene"), position)
+        if self._view_game is not self.session.game or self._view_location is None:
+            self.view_facing = "north"
+        elif location[:2] != self._view_location[:2]:
+            self.view_facing = "north"
+        elif position != self._view_location[2] and len(position) == 2:
+            previous = self._view_location[2]
+            if len(previous) == 2:
+                delta = (position[0] - previous[0], position[1] - previous[1])
+                self.view_facing = {(0, -1): "north", (1, 0): "east",
+                                    (0, 1): "south", (-1, 0): "west"}.get(delta, self.view_facing)
+        self._view_game = self.session.game
+        self._view_location = location
+        self.view_state = first_person_data(state, self.view_facing)
+        for button in (self.turn_left_button, self.turn_right_button):
+            button.configure(state="disabled" if state.get("scene") == "shop" else "normal")
+        if state.get("scene") == "shop":
+            caption = "Mira's sanctuary"
+        else:
+            caption = (f"{self.view_state['room_name']} · Facing {self.view_facing.title()}"
+                       + (f" · {self.view_state['enemy']['name']}" if self.view_state.get("enemy") else ""))
+        self.view_caption.set(caption)
+        self.draw_view()
+
+    def turn_view(self, steps: int) -> None:
+        if self.session.game is None:
+            return
+        directions = ("north", "east", "south", "west")
+        self.view_facing = directions[(directions.index(self.view_facing) + steps) % 4]
+        self.refresh_view(self.session.get_state())
+        self.command_entry.focus_set()
+
+    def draw_view(self) -> None:
+        if not self.view_state:
+            self.view_canvas.delete(VIEW_TAG)
+            return
+        draw_dungeon_view(self.view_canvas, self.view_canvas.winfo_width(),
+                          self.view_canvas.winfo_height(), self.view_state)
 
     def draw_map(self) -> None:
         self.map_canvas.delete("all")
@@ -549,6 +618,11 @@ class DungeonWindow:
         self.class_var.set(self.session.class_id)
         self.creation_message.set("Select a class, then click Roll Stats.")
         self.history.clear()
+        self.view_state = {}
+        self.view_facing = "north"
+        self._view_location = None
+        self._view_game = None
+        self.view_canvas.delete(VIEW_TAG)
         self.history_index = 0
         self.command_var.set("")
         self.terminal.configure(state="normal")
@@ -682,7 +756,21 @@ def run_gui_smoke(report_path: Path, name: str = "Adventurer", seed: int | None 
         assert_text_tag(app.session.game.room.description, "room")
         assert_text_tag(app.session.game.dungeon.lore.arrival, "room")
         checks.append("enter_dungeon")
+        assert app.view_canvas.find_withtag(VIEW_TAG) and app.view_canvas.find_withtag("view-wall")
+        assert app.view_canvas.winfo_height() > 100 and app.view_state["class_id"] == "rogue"
+        checks.append("first_person_view")
         before = app.session.game.get_state()
+        camera_rng = app.session.game.rng.getstate()
+        camera_history = list(app.history)
+        app.turn_right_button.invoke()
+        root.update()
+        assert app.view_facing == "east"
+        app.turn_left_button.invoke()
+        root.update()
+        assert app.view_facing == "north"
+        assert app.session.game.get_state() == before and app.session.game.rng.getstate() == camera_rng
+        assert app.history == camera_history
+        checks.append("view_camera")
         app.command_var.set("look")
         app.send_button.invoke()
         root.update()
@@ -729,6 +817,10 @@ def run_gui_smoke(report_path: Path, name: str = "Adventurer", seed: int | None 
         assert game.rng.calls == [(1, 20)]
         assert app.class_action.cget("text") == "Hide (opening)"
         checks.append("room_scouting")
+        assert app.view_facing == direction and app.view_state["enemy"]["name"] == "Unwary marauder"
+        assert app.view_canvas.find_withtag("view-enemy")
+        assert not app.view_canvas.find_withtag("view-loot") and not app.view_canvas.find_withtag("view-note")
+        checks.append("view_combat")
         bonus_before = game.bonus_action_available
         app.class_action.invoke()
         root.update()
@@ -751,9 +843,12 @@ def run_gui_smoke(report_path: Path, name: str = "Adventurer", seed: int | None 
         checks.append("rogue_opening_sneak")
         root.geometry("960x740")
         root.update()
-        for widget in (app.command_entry, app.send_button, app.class_action, app.restart_button):
+        for widget in (app.view_canvas, app.terminal, app.turn_left_button, app.turn_right_button,
+                       app.command_entry, app.send_button, app.class_action, app.restart_button):
             assert widget.winfo_height() > 1
             assert widget.winfo_rooty() + widget.winfo_height() <= root.winfo_rooty() + root.winfo_height(), "A control is cut off at minimum window size."
+        assert app.view_canvas.winfo_height() >= 120 and app.terminal.winfo_height() >= 160
+        assert app.view_canvas.winfo_rootx() + app.view_canvas.winfo_width() <= app.map_canvas.winfo_rootx()
         checks.append("responsive_layout")
         # Equipment fixtures use the same entry field and buttons as a player.
         # Keep the scouting adventure intact for the death/restart checks below.
@@ -770,6 +865,9 @@ def run_gui_smoke(report_path: Path, name: str = "Adventurer", seed: int | None 
         gear_game.room.looted = False
         app.session.game = gear_game
         app.refresh_dungeon()
+        root.update()
+        assert app.view_state["loot"] and app.view_canvas.find_withtag("view-loot")
+        assert not app.view_canvas.find_withtag("view-enemy")
 
         def terminal_text():
             return app.terminal.get("1.0", "end-1c")
@@ -794,6 +892,8 @@ def run_gui_smoke(report_path: Path, name: str = "Adventurer", seed: int | None 
         app.action_buttons["loot"].invoke()
         root.update()
         assert gear_game.room.looted and dagger in gear_game.player.equipment_inventory
+        assert not app.view_state["loot"] and not app.view_canvas.find_withtag("view-loot")
+        checks.append("view_discovery")
         assert spare_armor in gear_game.player.equipment_inventory
         assert gear_game.player.weapon_id == "rapier", "Loot must preserve the Vex mastery tradeoff."
         before_inventory = terminal_text()
@@ -827,6 +927,10 @@ def run_gui_smoke(report_path: Path, name: str = "Adventurer", seed: int | None 
         gear_game.in_shop = True
         gear_game.player.gold = 100
         app.refresh_dungeon()
+        root.update()
+        assert app.view_state["scene"] == "shop" and app.view_canvas.find_withtag("view-sanctuary")
+        assert not app.view_canvas.find_withtag("view-enemy") and not app.view_state["loot"]
+        checks.append("view_sanctuary")
         menu_text = submit_widget("menu")
         assert "shop weapons" in menu_text and "shop armor" in menu_text and "shop supplies" in menu_text
         assert "dagger_1:" not in menu_text and dagger.description not in menu_text
@@ -893,6 +997,7 @@ def run_gui_smoke(report_path: Path, name: str = "Adventurer", seed: int | None 
         app.action_buttons["end"].invoke()
         root.update()
         assert game.over and game.player.dead and game.player.hp == 0
+        assert app.view_state["dead"] and app.view_canvas.find_withtag(VIEW_TAG)
         assert game.rng.calls == [(1, 20), (1, 6), (1, 6)]
         assert "You die in the catacombs at 0 HP" in app.terminal.get("1.0", "end")
         assert "Death save:" not in app.terminal.get("1.0", "end")
@@ -907,6 +1012,7 @@ def run_gui_smoke(report_path: Path, name: str = "Adventurer", seed: int | None 
         root.update()
         assert app.screen == "title" and app.session.game is None and app.session.rolls is None
         assert not app.history and not app.terminal.get("1.0", "end").strip()
+        assert not app.view_state and not app.view_canvas.find_withtag(VIEW_TAG)
         checks.append("new_adventure")
         assert not errors, errors
         report["success"] = True

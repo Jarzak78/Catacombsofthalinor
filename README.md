@@ -32,9 +32,9 @@ game and claims no official status.
 The main executable opens a desktop window. Its title screen depicts the
 catacomb entrance with softly flickering torches and has a **Character Creation** button. Choose a class,
 roll your abilities, and accept your character before clicking **Enter the
-Dungeon**. The adventure screen keeps a scrolling text terminal on the
-left, with a minimap in the upper-right corner and your character's status
-across the top. Type commands and press Enter or click **Send**, or use the
+Dungeon**. The adventure screen shows a first-person dungeon window above
+the scrolling text terminal on the left, with a minimap in the upper-right
+corner and your character's status across the top. Type commands and press Enter or click **Send**, or use the
 direction and common-action buttons. Your class button offers **Second
 Wind**, **Hide**, or a **Spells** menu. Mira's sanctuary has category buttons
 for weapons, armor, supplies, inventory, selling, and continuing the adventure.
@@ -47,7 +47,7 @@ gameplay stops. When the adventure ends, its text remains visible and
 Python and Tk are bundled, so you do not need to install Python or VS Code.
 Keep the included **CREDITS.txt** and **legal** folder with either executable
 when copying or sharing the game. Credits are also available from the game's
-**Credits** option or either launcher's `--credits` command-line option.
+**Credits & Licenses** option or the terminal launcher's `--credits` option.
 The packaged Windows launchers ask you to accept the included
 [Microsoft runtime terms](legal/END_USER_TERMS.txt) before play. Those
 terms concern only the bundled Microsoft components and do not relicense
@@ -383,6 +383,32 @@ This game adapts selected material and does not implement either complete
 ruleset. [CREDITS.txt](CREDITS.txt) contains the exact attribution statements
 and an explanation of the changes. The README describes the implemented
 mechanics in wording written for this project.
+
+## First-person dungeon view
+
+The **FIRST PERSON** window depicts the room from your adventurer's point
+of view. Perspective stonework and torchlight change as you descend:
+burial chambers, tangled roots, the burning forge, the starless vault,
+and the heart's royal depths. Your class determines the foreground
+weapon or spell focus. Visible foes and guardians appear in the room;
+the sanctuary shows Mira's warm counter and the way onward.
+
+Use **Turn Left** and **Turn Right** to look around for free. Moving with
+the compass buttons or movement commands faces the direction traveled.
+The caption shows the current room and facing. Camera turns and window
+resizing do not spend actions, advance time, or roll gameplay dice.
+
+Only the current visited room is rendered. Unexplored rooms remain
+unknown. During a fight, the foe takes precedence over treasure and lore.
+When the room is safe, a container or document can be visible, but
+`loot` still reveals exact items and quantities and `read` opens collected
+lore. An unlocked guardian portal is visible only in its own chamber.
+The illustration updates after commands, defeat, shopping, and descent.
+
+This first version uses original procedural canvas artwork with no
+additional runtime dependencies. `view_model.py` supplies a detached,
+visibility-filtered view, while `dungeon_view.py` paints it. The terminal,
+minimap, and existing command controls remain available.
 
 ## Develop and test
 

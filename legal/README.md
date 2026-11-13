@@ -151,3 +151,14 @@ changes.
 New provenance entries should be added below or linked to a dedicated
 asset/source record in this directory. Keep the short contributor rules
 in [AGENTS.md](../AGENTS.md) aligned with this record.
+
+### First-person room artwork (2026-11-13)
+
+The first-person room illustration in `dungeon_view.py` and its presentation
+adapter in `view_model.py` were developed for this project with AI
+assistance. The perspective architecture, floor palettes, foe silhouettes,
+class hands/equipment, sanctuary, and room props are drawn with standard
+Tk Canvas primitives. This change imports no outside artwork, character
+models, textures, music, or fonts and adds no third-party runtime dependency.
+The source record does not claim exclusive copyright in generated output.
+Existing SRD attribution and software notices continue to accompany the game.
