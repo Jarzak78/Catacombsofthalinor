@@ -63,9 +63,10 @@ and `lore_notes.py`, dialogue in `campaign.py`, creature text in
 `monster_catalog.py` and `enemy_lore.py`, and flavor text in
 `battle_flavor.py` and `loot_flavor.py`. The entrance illustration and
 torch animation are drawn in code in `entrance_art.py`; the terminal
-entrance is ASCII in `title_screen.py`. No external image, music, or font
-asset is intentionally supplied with this version. Interface fonts use
-the user's installed system fonts.
+entrance is ASCII in `title_screen.py`. The first-person view also uses
+project-generated PNG artwork described in `assets/realistic/asset_sources.json`.
+No outside image pack, music, or font asset is intentionally supplied by
+the project. Interface fonts use the user's installed system fonts.
 
 This records the project's known sources; it is not proof that a name or
 passage has never been used elsewhere. Development includes AI assistance.
@@ -162,3 +163,23 @@ Tk Canvas primitives. This change imports no outside artwork, character
 models, textures, music, or fonts and adds no third-party runtime dependency.
 The source record does not claim exclusive copyright in generated output.
 Existing SRD attribution and software notices continue to accompany the game.
+
+### Textured character and weapon artwork (2026-11-16)
+
+Four transparent PNG atlases in `assets/realistic/` were generated for this
+project with OpenAI's image-generation tool. They contain six first-person
+hand/weapon compositions, nine creature archetypes, five guardian portraits,
+and Mira. Prompts requested original generic fantasy designs and realistic
+materials; no franchise characters, named-artist style, logos, outside art
+packs, or real-person likeness references were supplied. Further image-tool
+passes refined transparency, atlas spacing, and the axe's cutting-edge
+orientation. Runtime region extraction and alpha-aware scaling preserve the
+source PNG files rather than replacing their artwork with new drawings.
+
+`asset_sources.json` records the prompts, layouts, generation method, source
+hashes, and rights qualifications. The release also includes an unchanged
+copy as `legal/artwork-sources.json` in the license reader and ZIP. This
+source record does not guarantee uniqueness, copyrightability, exclusive
+ownership, or comprehensive legal clearance. Existing SRD permissions and
+software notices continue to apply independently. The raster loader adds
+no third-party runtime library or new native dependency.

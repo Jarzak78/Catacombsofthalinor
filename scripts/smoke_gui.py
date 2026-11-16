@@ -8,6 +8,7 @@ from tempfile import TemporaryDirectory
 
 
 REQUIRED_CHECKS = frozenset({
+    "realistic_hands", "realistic_enemies", "realistic_sanctuary",
     "first_person_view", "view_camera", "view_combat", "view_discovery", "view_sanctuary",
     "title_screen", "credits", "runtime_terms", "torch_flicker", "character_creation", "class_choice", "4d6_drop_lowest",
     "one_reroll", "enter_dungeon", "command_submission", "minimap",

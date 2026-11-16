@@ -201,7 +201,9 @@ class FirstPersonViewTests(unittest.TestCase):
         game.room.loot = Loot(equipment=(make_equipment("longsword", 3),))
         view = first_person_data(game.get_state())
         self.assertTrue(view["loot"])
-        self.assertNotIn("longsword", json.dumps(view).lower())
+        self.assertEqual(view["weapon_id"], game.player.weapon_id)
+        self.assertNotIn("longsword_3", json.dumps(view).lower())
+        self.assertNotIn("equipment", view)
         game.room.looted = True
         self.assertFalse(first_person_data(game.get_state())["loot"])
 
@@ -228,6 +230,7 @@ class FirstPersonViewTests(unittest.TestCase):
         rng = game.rng.getstate()
         one_handed = game.player.equipped_weapon
         self.assertFalse(first_person_data(game.get_state())["two_handed"])
+        self.assertEqual(first_person_data(game.get_state())["weapon_id"], "longsword")
         greatsword = make_equipment("greatsword", 1)
         game.player.collect_equipment(greatsword, auto_equip=False)
         self.assertFalse(first_person_data(game.get_state())["two_handed"],
@@ -235,10 +238,22 @@ class FirstPersonViewTests(unittest.TestCase):
         self.assertTrue(game.player.equip_equipment(greatsword))
         state = game.get_state()
         self.assertTrue(first_person_data(state)["two_handed"])
+        self.assertEqual(first_person_data(state)["weapon_id"], "greatsword")
         self.assertEqual(game.get_state(), state)
         self.assertTrue(game.player.equip_equipment(one_handed))
         self.assertFalse(first_person_data(game.get_state())["two_handed"])
+        self.assertEqual(first_person_data(game.get_state())["weapon_id"], "longsword")
         self.assertEqual(game.rng.getstate(), rng)
+
+    def test_weapon_identity_accepts_only_known_weapon_types(self):
+        state = self.state()
+        for invalid in (None, ["greatsword"], {"id": "greatsword"},
+                        "SECRET UNKNOWN WEAPON", "leather", 42):
+            with self.subTest(weapon=invalid):
+                state["player"]["weapon_id"] = invalid
+                view = first_person_data(state)
+                self.assertEqual(view["weapon_id"], "")
+                self.assertFalse(view["two_handed"])
 
     def test_all_views_return_fresh_nested_structures(self):
         state = self.state()

@@ -32,6 +32,13 @@ The license does not grant trademark rights or imply endorsement.
 
 SOFTWARE AND OTHER MATERIAL
 
+The first-person character and weapon artwork was generated for this
+project with OpenAI's image-generation tool. Sources, prompts, and hashes
+are recorded in legal/artwork-sources.json in the Windows release and
+assets/realistic/asset_sources.json in the source. No outside image pack
+or real-person reference was supplied. This record does not assert
+exclusive copyright or comprehensive clearance of generated output.
+
 The packaged game includes Python and, in the desktop edition, Tcl/Tk.
 The Windows download's legal/ folder includes third-party notices
 collected from the build environment. Keep that folder with the game.

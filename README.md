@@ -405,10 +405,22 @@ When the room is safe, a container or document can be visible, but
 lore. An unlocked guardian portal is visible only in its own chamber.
 The illustration updates after commands, defeat, shopping, and descent.
 
-This first version uses original procedural canvas artwork with no
-additional runtime dependencies. `view_model.py` supplies a detached,
-visibility-filtered view, while `dungeon_view.py` paints it. The terminal,
-minimap, and existing command controls remain available.
+The view combines perspective canvas architecture with original textured
+PNG artwork for hands, weapons, creatures, all five guardians, and Mira.
+The foreground includes sword-and-shield, greatsword, greataxe, rapier,
+dagger, and staff grips; other weapon types use their class's supplied
+grip illustration. This is presentation art and does not change equipment
+statistics or grant extra attacks. Creature portraits represent their
+visible archetype; the five guardians each have their own artwork.
+
+`sprite_art.py` extracts atlas regions and smoothly scales transparent
+sprites using the standard library. It caches images for normal redraws,
+so the game needs no runtime image-library installation. `view_model.py`
+supplies detached, visibility-filtered data, while `dungeon_view.py` paints
+it. The terminal, minimap, and existing command controls remain available.
+Source and generation records are in `assets/realistic/asset_sources.json`.
+The GUI executable embeds and verifies the artwork and provenance; the
+terminal executable keeps its text interface without loading these images.
 
 ## Develop and test
 

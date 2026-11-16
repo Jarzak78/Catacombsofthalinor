@@ -9,6 +9,7 @@ from importlib.metadata import PackageNotFoundError, version
 import hashlib
 import json
 from pathlib import Path
+import shutil
 import struct
 import subprocess
 import sys
@@ -18,10 +19,12 @@ if __package__:
     from .collect_licenses import (
         NoticeError, audit_analysis, collect_notices, copy_notices, verify_embedded_notices,
     )
+    from .verify_art_assets import AssetError, stage_art_assets, verify_embedded_art
 else:
     from collect_licenses import (
         NoticeError, audit_analysis, collect_notices, copy_notices, verify_embedded_notices,
     )
+    from verify_art_assets import AssetError, stage_art_assets, verify_embedded_art
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -66,9 +69,14 @@ def main() -> int:
     build_directory = ROOT / "build"
     build_directory.mkdir(parents=True, exist_ok=True)
     try:
+        artwork, art_records = stage_art_assets(ROOT, build_directory / "artwork-bundle")
         notices = collect_notices(ROOT, build_directory / "license-bundle")
-    except (NoticeError, OSError, UnicodeError) as error:
-        print(f"License collection failed: {error}", file=sys.stderr)
+        # Keep the artwork's source record readable in the existing license
+        # browser and ZIP legal/ folder as well as beside the embedded sprites.
+        provenance = artwork / "realistic" / "asset_sources.json"
+        shutil.copy2(provenance, notices / "legal" / "artwork-sources.json")
+    except (AssetError, NoticeError, OSError, UnicodeError) as error:
+        print(f"Release resource collection failed: {error}", file=sys.stderr)
         return 1
     targets = (
         ("CatacombsOfThalinor", "GuiMain.py", "--windowed"),
@@ -76,6 +84,8 @@ def main() -> int:
     )
     binaries = []
     for name, entry_point, window_mode in targets:
+        art_arguments = (["--add-data", f"{artwork}:assets"]
+                         if window_mode == "--windowed" else [])
         try:
             subprocess.run(
                 [
@@ -98,6 +108,7 @@ def main() -> int:
                     f"{notices / 'CREDITS.txt'}:.",
                     "--add-data",
                     f"{notices / 'legal'}:legal",
+                    *art_arguments,
                     str(ROOT / entry_point),
                 ],
                 cwd=ROOT,
@@ -116,18 +127,25 @@ def main() -> int:
             return 1
         try:
             verify_embedded_notices(executable, notices)
+            if art_arguments:
+                verify_embedded_art(executable, artwork)
             dependencies = audit_analysis(build_directory / name / "Analysis-00.toc", Path(sys.base_prefix))
-        except (NoticeError, OSError, UnicodeError, ValueError) as error:
-            print(f"License verification failed: {error}", file=sys.stderr)
+        except (AssetError, NoticeError, OSError, UnicodeError, ValueError) as error:
+            print(f"Release resource verification failed: {error}", file=sys.stderr)
             return 1
         binaries.append({"executable": executable.name,
                          "sha256": hashlib.sha256(executable.read_bytes()).hexdigest(),
+                         "artwork": art_records if art_arguments else [],
                          "native_dependencies": dependencies})
         print(f"Windows executable ready: {executable}")
 
     try:
         copy_notices(notices, ROOT / "dist")
         manifest = {"notice_manifest": "legal/runtime/notice-manifest.json", "executables": binaries,
+                    "artwork": art_records,
+                    "artwork_provenance": {
+                        "path": "legal/artwork-sources.json",
+                        "sha256": hashlib.sha256(provenance.read_bytes()).hexdigest()},
                     "embedded_notice_files": [
                         {"path": path.relative_to(notices).as_posix(),
                          "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
@@ -147,6 +165,7 @@ def main() -> int:
         print(f"Distribution notice verification failed: {error}", file=sys.stderr)
         return 1
     print("Project credits, runtime license texts, native dependency inventory and hashes verified.")
+    print("Original sprite atlases, provenance record and embedded artwork hashes verified.")
     return 0
 
 

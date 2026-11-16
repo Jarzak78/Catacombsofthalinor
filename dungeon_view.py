@@ -6,6 +6,7 @@ chooses loot, schedules callbacks, or consumes random numbers.
 """
 
 from math import cos, pi, sin
+from sprite_art import draw_sprite, enemy_sprite_key, hand_sprite_key
 
 
 VIEW_TAG = "dungeon-view"
@@ -100,6 +101,10 @@ def draw_dungeon_view(canvas, width: float, height: float, view: dict) -> None:
         kind = str(enemy.get("archetype", "humanoid")).lower()
         name = str(enemy.get("name", "")).lower()
         boss = bool(enemy.get("boss"))
+        if draw_sprite(canvas, enemy_sprite_key(enemy, floor), 500 * sx, 307 * sy,
+                       (440 if boss else 385) * sx, (310 if boss else 270) * sy,
+                       anchor="s", tags=(VIEW_TAG, "view-enemy")):
+            return
         armor = ("#8b9695", "#627c5b", "#9b7654", "#737eaa", "#9b6871")[floor - 1]
         shadow = "#111921"
         glow = ("#e2c68b", "#c1dd7e", "#ffbe69", "#bfccff", "#efb0a6")[floor - 1]
@@ -217,6 +222,13 @@ def draw_dungeon_view(canvas, width: float, height: float, view: dict) -> None:
                 oval(x, 114, x + 5, 119, glow, tag="view-enemy")
 
     def hands(class_id):
+        sprite_key = hand_sprite_key(view)
+        tags = (VIEW_TAG, "view-hands", "view-shield") if sprite_key == "sword_shield" else (VIEW_TAG, "view-hands")
+        heavy = sprite_key in ("greatsword", "greataxe")
+        if draw_sprite(canvas, sprite_key, width * (.65 if heavy else .5), height + 3 * sy,
+                       width * (.67 if heavy else .97), height * (.88 if heavy else .96),
+                       anchor="s", tags=tags):
+            return
         glove = "#303b40" if not view.get("hidden") else "#1c292b"
         skin = "#af8d73"
         if class_id == "wizard":
@@ -280,17 +292,19 @@ def draw_dungeon_view(canvas, width: float, height: float, view: dict) -> None:
                     bx, by = x + 18 + column * 49, 101 + row * 50
                     rect(bx + 9, by - 7, bx + 17, by + 3, "#b8a57d", tag="view-sanctuary")
                     oval(bx, by, bx + 27, by + 28, color, "#1a2022", 2, "view-sanctuary")
-        # Mira is an original silhouette behind her counter.
-        poly((437, 212, 443, 142, 466, 112, 500, 101, 534, 112,
-              557, 142, 563, 212), "#38544d", "#182c29", 3, "view-sanctuary")
-        oval(474, 120, 526, 174, "#bd9f82", "#4e4940", 2, "view-sanctuary")
-        poly((473, 139, 478, 115, 503, 108, 527, 121, 528, 147,
-              515, 128, 487, 127), "#92978b", tag="view-sanctuary")
-        for x in (485, 509):
-            line((x, 143, x + 5, 143), "#3d4544", 2, "view-sanctuary")
-        line((491, 158, 508, 158), "#876c5a", 2, "view-sanctuary")
-        line((465, 182, 447, 220), "#4b6960", 20, "view-sanctuary")
-        line((535, 182, 553, 220), "#4b6960", 20, "view-sanctuary")
+        # The merchant's original raster portrait sits behind the counter.
+        if not draw_sprite(canvas, "mira", 500 * sx, 235 * sy, 225 * sx, 202 * sy,
+                           anchor="s", tags=(VIEW_TAG, "view-sanctuary")):
+            poly((437, 212, 443, 142, 466, 112, 500, 101, 534, 112,
+                  557, 142, 563, 212), "#38544d", "#182c29", 3, "view-sanctuary")
+            oval(474, 120, 526, 174, "#bd9f82", "#4e4940", 2, "view-sanctuary")
+            poly((473, 139, 478, 115, 503, 108, 527, 121, 528, 147,
+                  515, 128, 487, 127), "#92978b", tag="view-sanctuary")
+            for x in (485, 509):
+                line((x, 143, x + 5, 143), "#3d4544", 2, "view-sanctuary")
+            line((491, 158, 508, 158), "#876c5a", 2, "view-sanctuary")
+            line((465, 182, 447, 220), "#4b6960", 20, "view-sanctuary")
+            line((535, 182, 553, 220), "#4b6960", 20, "view-sanctuary")
         rect(292, 217, 707, 241, "#9e7850", "#3a2d25", 3, "view-sanctuary")
         poly((307, 241, 691, 241, 711, 315, 289, 315),
              "#644936", "#382a25", 3, "view-sanctuary")

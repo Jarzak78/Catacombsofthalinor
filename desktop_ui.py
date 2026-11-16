@@ -978,6 +978,46 @@ def run_gui_smoke(report_path: Path, name: str = "Adventurer", seed: int | None 
         assert (gear_game.elapsed_minutes, gear_game.actions_remaining,
                 gear_game.bonus_action_available) == gear_budget
         checks.append("vendor_equipment")
+        # Every shipped portrait/grip must actually create a Tk image, rather
+        # than silently relying on the vector fallback in a packaged build.
+        from copy import deepcopy
+        from dungeon_view import draw_dungeon_view
+        protected_state, protected_rng = gear_game.get_state(), gear_game.rng.getstate()
+        sample = deepcopy(app.view_state)
+        sample.update(scene="dungeon", enemy=None, loot=False, note=False,
+                      portal=False, in_combat=False, dead=False, hidden=False)
+        def picture(view, expected):
+            draw_dungeon_view(app.view_canvas, app.view_canvas.winfo_width(),
+                              app.view_canvas.winfo_height(), view)
+            root.update_idletasks()
+            items = app.view_canvas.find_withtag("sprite-" + expected)
+            assert items and all(app.view_canvas.type(item) == "image" for item in items), expected
+        for class_id, weapon_id, two_handed, expected in (
+                ("fighter", "longsword", False, "sword_shield"),
+                ("fighter", "greatsword", True, "greatsword"),
+                ("fighter", "greataxe", True, "greataxe"),
+                ("rogue", "rapier", False, "rogue_rapier"),
+                ("rogue", "dagger", False, "rogue_dagger"),
+                ("wizard", "arcane_staff", True, "wizard_staff")):
+            sample.update(class_id=class_id, weapon_id=weapon_id, two_handed=two_handed)
+            picture(sample, expected)
+        checks.append("realistic_hands")
+        for name, kind, expected in (
+                ("Bone Sentry", "armored", "skeleton"), ("Crypt Rat", "rat", "rat"),
+                ("Grave Marauder", "humanoid", "armored"), ("Crypt Beetle", "insect", "beetle"),
+                ("Rootcoil Viper", "serpent", "serpent"), ("Crown Wisp", "wisp", "wisp"),
+                ("Moldbound Keeper", "humanoid", "fungal"),
+                ("Bellows Automaton", "armored", "construct"), ("Dark Ooze", "ooze", "ooze")):
+            sample.update(enemy={"name": name, "archetype": kind, "boss": False}, in_combat=True)
+            picture(sample, expected)
+        for floor, expected in enumerate(("warden", "sentinel", "colossus", "void_knight", "hollow_king"), 1):
+            sample.update(floor=floor, enemy={"name": "Guardian", "archetype": "armored", "boss": True})
+            picture(sample, expected)
+        checks.append("realistic_enemies")
+        sample.update(scene="shop", enemy=None, in_combat=False)
+        picture(sample, "mira")
+        assert gear_game.get_state() == protected_state and gear_game.rng.getstate() == protected_rng
+        checks.append("realistic_sanctuary")
         app.session.game = adventure_game
         app.refresh_dungeon()
         # A real enemy strike must end the run and enable a clean restart.
