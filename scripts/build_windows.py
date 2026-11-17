@@ -75,6 +75,8 @@ def main() -> int:
         # browser and ZIP legal/ folder as well as beside the embedded sprites.
         provenance = artwork / "realistic" / "asset_sources.json"
         shutil.copy2(provenance, notices / "legal" / "artwork-sources.json")
+        room_provenance = artwork / "rooms" / "asset_sources.json"
+        shutil.copy2(room_provenance, notices / "legal" / "room-artwork-sources.json")
     except (AssetError, NoticeError, OSError, UnicodeError) as error:
         print(f"Release resource collection failed: {error}", file=sys.stderr)
         return 1
@@ -146,6 +148,9 @@ def main() -> int:
                     "artwork_provenance": {
                         "path": "legal/artwork-sources.json",
                         "sha256": hashlib.sha256(provenance.read_bytes()).hexdigest()},
+                    "room_artwork_provenance": {
+                        "path": "legal/room-artwork-sources.json",
+                        "sha256": hashlib.sha256(room_provenance.read_bytes()).hexdigest()},
                     "embedded_notice_files": [
                         {"path": path.relative_to(notices).as_posix(),
                          "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
@@ -166,6 +171,8 @@ def main() -> int:
         return 1
     print("Project credits, runtime license texts, native dependency inventory and hashes verified.")
     print("Original sprite atlases, provenance record and embedded artwork hashes verified.")
+    print("All sixty room portraits, room provenance and embedded room artwork hashes verified.")
+    print("All fifteen themed doorway cutouts and their provenance hashes verified.")
     return 0
 
 

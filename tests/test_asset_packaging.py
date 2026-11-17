@@ -13,12 +13,12 @@ from unittest.mock import patch
 import zlib
 
 from scripts.verify_art_assets import (
-    AssetError, REQUIRED_ATLASES, png_info, stage_art_assets, verify_embedded_art,
+    AssetError, REQUIRED_ATLASES, REQUIRED_ROOM_ATLASES, png_info, stage_art_assets, verify_embedded_art,
 )
 from scripts import build_windows
 
 
-def png(width=192, height=192, *, alpha=True):
+def png(width=192, height=192, *, alpha=True, shade=0):
     """A small real PNG fixture produced entirely with the standard library."""
     def chunk(kind, data):
         return (struct.pack(">I", len(data)) + kind + data
@@ -26,7 +26,7 @@ def png(width=192, height=192, *, alpha=True):
     color = 6 if alpha else 2
     channels = 4 if alpha else 3
     header = struct.pack(">IIBBBBB", width, height, 8, color, 0, 0, 0)
-    pixels = b"".join(b"\0" + b"\0" * (width * channels) for _ in range(height))
+    pixels = b"".join(b"\0" + bytes((shade,)) * (width * channels) for _ in range(height))
     return (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", header)
             + chunk(b"IDAT", zlib.compress(pixels)) + chunk(b"IEND", b""))
 
@@ -38,6 +38,20 @@ def project(root):
     (art / "asset_sources.json").write_text(json.dumps(manifest) + "\n", encoding="utf-8")
     for name in REQUIRED_ATLASES:
         (art / name).write_bytes(png())
+    rooms = root / "assets" / "rooms"
+    rooms.mkdir()
+    atlases = []
+    for floor, name in enumerate(REQUIRED_ROOM_ATLASES, 1):
+        data = png(384, 384, alpha=False, shade=floor)
+        (rooms / name).write_bytes(data)
+        atlases.append({"file": name, "floor": floor, "columns": 2, "rows": 6,
+                        "sha256": hashlib.sha256(data).hexdigest()})
+    doorways = png(192, 320, alpha=True, shade=7)
+    (rooms / "doorways.png").write_bytes(doorways)
+    (rooms / "asset_sources.json").write_text(json.dumps({
+        "source": "Original generated room fixture", "atlases": atlases,
+        "doorways": {"file": "doorways.png", "columns": 3, "rows": 5,
+                     "sha256": hashlib.sha256(doorways).hexdigest()}}), encoding="utf-8")
     return art
 
 
@@ -47,15 +61,19 @@ class AssetPackagingTests(unittest.TestCase):
             root = Path(temporary)
             source = project(root)
             staged, records = stage_art_assets(root, root / "build" / "artwork")
-            self.assertEqual(len(records), 4)
-            for original in source.iterdir():
+            self.assertEqual(len(records), 10)
+            for original in (root / "assets").rglob("*"):
+                if not original.is_file():
+                    continue
                 self.assertEqual(original.read_bytes(),
-                                 (staged / "realistic" / original.name).read_bytes())
+                                 (staged / original.relative_to(root / "assets")).read_bytes())
             for record in records:
                 data = (root / record["path"]).read_bytes()
                 self.assertEqual(record["sha256"], hashlib.sha256(data).hexdigest())
                 self.assertEqual(record["png_sha256"], record["sha256"])
-                self.assertEqual((record["width"], record["height"]), (192, 192))
+                size = ((192, 320) if record["path"].endswith("doorways.png") else
+                        (384, 384) if "/rooms/" in record["path"] else (192, 192))
+                self.assertEqual((record["width"], record["height"]), size)
 
     def test_base64_source_form_is_supported_without_changing_the_art(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -114,6 +132,120 @@ class AssetPackagingTests(unittest.TestCase):
             fallback.write_bytes(base64.b64encode(png(200, 192)))
             with self.assertRaisesRegex(AssetError, "disagree"):
                 stage_art_assets(root, root / "build/artwork")
+
+    def test_opaque_room_atlases_are_allowed_but_character_sprites_still_need_alpha(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = project(root)
+            staged, records = stage_art_assets(root, root / "build/artwork")
+            self.assertEqual(sum("/rooms/floor_" in record["path"] for record in records), 5)
+            self.assertTrue((staged / "rooms/floor_5.png").is_file())
+            (source / "hands.png").write_bytes(png(alpha=False))
+            with self.assertRaisesRegex(AssetError, "transparency"):
+                stage_art_assets(root, root / "build/artwork")
+
+    def test_missing_room_atlas_or_provenance_stops_release_before_staging(self):
+        for name in ("floor_1.png", "floor_5.png", "doorways.png", "asset_sources.json"):
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                project(root)
+                (root / "assets/rooms" / name).unlink()
+                destination = root / "build/artwork"
+                with self.assertRaisesRegex(AssetError, name):
+                    stage_art_assets(root, destination)
+                self.assertFalse(destination.exists())
+
+    def test_room_hashes_reject_changed_or_swapped_floor_art(self):
+        for replace in ("changed", "swapped"):
+            with self.subTest(replace=replace), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                project(root)
+                rooms = root / "assets/rooms"
+                data = (rooms / "floor_2.png").read_bytes() if replace == "swapped" else png(384, 384, alpha=False, shade=99)
+                (rooms / "floor_1.png").write_bytes(data)
+                with self.assertRaisesRegex(AssetError, "provenance hash"):
+                    stage_art_assets(root, root / "build/artwork")
+
+    def test_room_provenance_rejects_incomplete_duplicate_or_wrong_grid_records(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            project(root)
+            path = root / "assets/rooms/asset_sources.json"
+            original = json.loads(path.read_text())
+            for change in ("missing", "duplicate", "grid", "floor", "digest", "nondict"):
+                with self.subTest(change=change):
+                    record = json.loads(json.dumps(original))
+                    if change == "missing":
+                        record["atlases"].pop()
+                    elif change == "duplicate":
+                        record["atlases"][1] = record["atlases"][0]
+                    elif change == "grid":
+                        record["atlases"][0]["rows"] = 5
+                    elif change == "floor":
+                        record["atlases"][0]["floor"] = 2
+                    elif change == "digest":
+                        record["atlases"][0]["sha256"] = "z" * 64
+                    else:
+                        record["atlases"][0] = "floor_1.png"
+                    path.write_text(json.dumps(record), encoding="utf-8")
+                    with self.assertRaises(AssetError):
+                        stage_art_assets(root, root / "build/artwork")
+
+    def test_room_atlas_dimensions_and_corruption_are_checked_before_hashes(self):
+        for data, error in ((png(256, 256, alpha=False), "too small"),
+                            (png(384, 768, alpha=False), "square"),
+                            (png(384, 384, alpha=False)[:-1], "Truncated")):
+            with self.subTest(error=error), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                project(root)
+                (root / "assets/rooms/floor_1.png").write_bytes(data)
+                with self.assertRaisesRegex(AssetError, error):
+                    stage_art_assets(root, root / "build/artwork")
+
+    def test_base64_room_atlases_preserve_decoded_provenance_hash(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            project(root)
+            path = root / "assets/rooms/floor_1.png"
+            original = path.read_bytes()
+            path.unlink()
+            path.with_suffix(".png.b64").write_bytes(base64.encodebytes(original))
+            staged, records = stage_art_assets(root, root / "build/artwork")
+            record = next(row for row in records if row["path"].endswith("floor_1.png.b64"))
+            self.assertEqual(record["png_sha256"], hashlib.sha256(original).hexdigest())
+            self.assertEqual((staged / "rooms/floor_1.png.b64").read_bytes(), base64.encodebytes(original))
+
+    def test_doorway_portrait_requires_transparency_size_and_matching_hash(self):
+        for replacement, error in ((png(192, 320, alpha=False), "transparency"),
+                                   (png(96, 96), "too small"),
+                                   (png(192, 320, alpha=True, shade=99), "provenance hash")):
+            with self.subTest(error=error), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                project(root)
+                (root / "assets/rooms/doorways.png").write_bytes(replacement)
+                with self.assertRaisesRegex(AssetError, error):
+                    stage_art_assets(root, root / "build/artwork")
+
+    def test_doorway_provenance_requires_the_authored_cutout_grid(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            project(root)
+            path = root / "assets/rooms/asset_sources.json"
+            original = json.loads(path.read_text())
+            for change in ("missing", "file", "grid", "hash"):
+                with self.subTest(change=change):
+                    record = json.loads(json.dumps(original))
+                    if change == "missing":
+                        del record["doorways"]
+                    elif change == "file":
+                        record["doorways"]["file"] = "floor_1.png"
+                    elif change == "grid":
+                        record["doorways"]["columns"] = 2
+                    else:
+                        record["doorways"]["sha256"] = "invalid"
+                    path.write_text(json.dumps(record), encoding="utf-8")
+                    with self.assertRaisesRegex(AssetError, "doorway"):
+                        stage_art_assets(root, root / "build/artwork")
 
     def test_an_atlas_must_have_room_for_each_sprite_cell(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -178,11 +310,15 @@ class AssetPackagingTests(unittest.TestCase):
             verify.assert_called_once()
             self.assertEqual((source / "asset_sources.json").read_bytes(),
                              (root / "dist/legal/artwork-sources.json").read_bytes())
+            self.assertEqual((root / "assets/rooms/asset_sources.json").read_bytes(),
+                             (root / "dist/legal/room-artwork-sources.json").read_bytes())
             manifest = json.loads((root / "dist/build-manifest.json").read_text())
-            self.assertEqual(len(manifest["executables"][0]["artwork"]), 4)
+            self.assertEqual(len(manifest["executables"][0]["artwork"]), 10)
             self.assertEqual(manifest["executables"][1]["artwork"], [])
             self.assertEqual(manifest["artwork_provenance"]["sha256"],
                              hashlib.sha256((source / "asset_sources.json").read_bytes()).hexdigest())
+            self.assertEqual(manifest["room_artwork_provenance"]["sha256"],
+                             hashlib.sha256((root / "assets/rooms/asset_sources.json").read_bytes()).hexdigest())
 
 
 if __name__ == "__main__":

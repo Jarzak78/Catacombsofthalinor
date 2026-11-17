@@ -7,6 +7,7 @@ chooses loot, schedules callbacks, or consumes random numbers.
 
 from math import cos, pi, sin
 from sprite_art import draw_sprite, enemy_sprite_key, hand_sprite_key
+from room_art import draw_exit_art, draw_room_art, exit_art_placement
 
 
 VIEW_TAG = "dungeon-view"
@@ -142,6 +143,67 @@ def draw_dungeon_view(canvas, width: float, height: float, view: dict, *, animat
             line((px - 3, py, px + 3, py), "#b8ebe0", 2, "view-portal")
         poly((x - 59, y + 85, x + 59, y + 85, x + 76, y + 101, x - 76, y + 101),
              "#475b63", "#172831", tag="view-portal")
+
+    def painted_room_exits(exits):
+        # These narrow recesses meet the near floor/edge instead of placing
+        # the old broad, flat doorway panels over a painted room landmark.
+        stone, light, mortar = {
+            1: ("#383b3b", "#696b64", "#171b1d"),
+            2: ("#303b2f", "#5a6650", "#151f18"),
+            3: ("#453b31", "#7b6651", "#211b18"),
+            4: ("#303242", "#5f6277", "#151622"),
+            5: ("#3d3036", "#70545e", "#1e151b"),
+        }[floor]
+
+        def recess(left, top, right, bottom):
+            radius = (right - left) / 2
+            inset = max(8, radius * .23)
+            center, spring = (left + right) / 2, top + radius
+            # The dark cut-in and a second inset edge give actual wall depth.
+            arch(left - 5, top - 5, right + 5, bottom + 5, "#101316", mortar)
+            arch(left, top, right, bottom, stone, mortar)
+            arch(left + inset, top + inset, right - inset, bottom,
+                 "#080c10", mortar)
+            inner = right - left - 2 * inset
+            rect(left + inset + 2, spring + 2, left + inset + inner * .28, bottom,
+                 "#161c20", tag="view-exit")
+            line((left + inset + 2, spring, left + inset + 2, bottom),
+                 "#2e3332", 2, "view-exit")
+            # Individual arch stones and jamb joints read as masonry rather
+            # than one bright graphic outline. Their highlights stay subdued.
+            for i in range(7):
+                a, b = pi + i * pi / 7, pi + (i + 1) * pi / 7
+                ring = []
+                for r, angle in ((radius, a), (radius, b),
+                                 (radius - inset, b), (radius - inset, a)):
+                    ring.extend((center + r * cos(angle), spring + r * sin(angle)))
+                poly(ring, stone if i % 2 else light, mortar, 1, "view-exit")
+            for y in range(round(spring), round(bottom), 40):
+                for x1, x2 in ((left, left + inset), (right - inset, right)):
+                    line((x1 + 1, y, x2 - 1, y), mortar, 2, "view-exit")
+                    line((x1 + 2, y + 3, x2 - 2, y + 3), light, 1, "view-exit")
+            line((left + 2, spring + 2, left + 2, bottom), light, 1, "view-exit")
+
+        if exits.get("front") and not draw_exit_art(canvas, width, height, floor, "front",
+                                                    tags=(VIEW_TAG, "view-exit"),
+                                                    room_art_id=view.get("room_art_id")):
+            placement = exit_art_placement(floor, "front", view.get("room_art_id"))
+            if placement is not None:
+                center, bottom, passage_width, passage_height = placement
+                left, right = (center - passage_width / 2) * 1000, (center + passage_width / 2) * 1000
+                bottom, top = bottom * 400, (bottom - passage_height) * 400
+                recess(left, top, right, bottom)
+                poly((left + 12, bottom, right - 12, bottom,
+                      right - 5, bottom + 10, left + 5, bottom + 10),
+                     stone, mortar, 1, "view-exit")
+        if exits.get("left") and not draw_exit_art(canvas, width, height, floor, "left",
+                                                   tags=(VIEW_TAG, "view-exit"),
+                                                   room_art_id=view.get("room_art_id")):
+            recess(17, 159, 139, 425)
+        if exits.get("right") and not draw_exit_art(canvas, width, height, floor, "right",
+                                                    tags=(VIEW_TAG, "view-exit"),
+                                                    room_art_id=view.get("room_art_id")):
+            recess(861, 159, 983, 425)
 
     def foe(enemy):
         # No official creature designs: simple silhouettes built for this project.
@@ -397,49 +459,54 @@ def draw_dungeon_view(canvas, width: float, height: float, view: dict, *, animat
         # The known sanctuary always has an onward/departure portal.
         portal(822, 244)
     else:
-        poly((0, 0, 1000, 0, 740, 68, 260, 68), ceiling)
-        rect(260, 68, 740, 273, wall)
-        poly((0, 0, 260, 68, 260, 273, 0, 400), side)
-        poly((1000, 0, 740, 68, 740, 273, 1000, 400), side)
-        poly((0, 400, 260, 273, 740, 273, 1000, 400), ground)
-        # Mortar on the far wall and perspective lines along the side planes.
-        for row in range(5):
-            y = 72 + row * 40
-            line((262, y, 738, y), seam, 2)
-            offset = 43 if row % 2 else 0
-            for col in range(6):
-                x = 278 + col * 86 + offset
-                if x < 735:
-                    line((x, y, x, min(y + 40, 273)), seam, 2)
-        for y in (91, 140, 190, 239):
-            t = (y - 68) / 205
-            outer_y = t * 400
-            line((0, outer_y, 260, y), seam, 2)
-            line((1000, outer_y, 740, y), seam, 2)
-        for x in (94, 182):
-            for y1, y2 in ((0, 105), (119, 226), (244, 367)):
-                line((x, y1 + x * 0.15, x, y2 - x * 0.12), seam, 1)
-                line((1000 - x, y1 + x * 0.15, 1000 - x, y2 - x * 0.12), seam, 1)
-        for x in (40, 220, 400, 600, 780, 960):
-            line((500 + (x - 500) * 0.28, 273, x, 400), seam, 2)
-        for y in (292, 324, 365):
-            t = (y - 273) / 127
-            line((260 * (1 - t), y, 740 + 260 * t, y), edge, 1)
-        line((260, 68, 260, 273, 0, 400), edge, 2)
-        line((740, 68, 740, 273, 1000, 400), edge, 2)
+        has_room_art = draw_room_art(canvas, width, height, view.get("room_art_id"),
+                                     tags=(VIEW_TAG, "view-wall"))
+        if not has_room_art:
+            poly((0, 0, 1000, 0, 740, 68, 260, 68), ceiling)
+            rect(260, 68, 740, 273, wall)
+            poly((0, 0, 260, 68, 260, 273, 0, 400), side)
+            poly((1000, 0, 740, 68, 740, 273, 1000, 400), side)
+            poly((0, 400, 260, 273, 740, 273, 1000, 400), ground)
+            # Mortar on the far wall and perspective lines along the side planes.
+            for row in range(5):
+                y = 72 + row * 40
+                line((262, y, 738, y), seam, 2)
+                offset = 43 if row % 2 else 0
+                for col in range(6):
+                    x = 278 + col * 86 + offset
+                    if x < 735:
+                        line((x, y, x, min(y + 40, 273)), seam, 2)
+            for y in (91, 140, 190, 239):
+                t = (y - 68) / 205
+                outer_y = t * 400
+                line((0, outer_y, 260, y), seam, 2)
+                line((1000, outer_y, 740, y), seam, 2)
+            for x in (94, 182):
+                for y1, y2 in ((0, 105), (119, 226), (244, 367)):
+                    line((x, y1 + x * 0.15, x, y2 - x * 0.12), seam, 1)
+                    line((1000 - x, y1 + x * 0.15, 1000 - x, y2 - x * 0.12), seam, 1)
+            for x in (40, 220, 400, 600, 780, 960):
+                line((500 + (x - 500) * 0.28, 273, x, 400), seam, 2)
+            for y in (292, 324, 365):
+                t = (y - 273) / 127
+                line((260 * (1 - t), y, 740 + 260 * t, y), edge, 1)
+            line((260, 68, 260, 273, 0, 400), edge, 2)
+            line((740, 68, 740, 273, 1000, 400), edge, 2)
 
         exits = view.get("exits") or {}
-        if exits.get("front"):
+        if has_room_art:
+            painted_room_exits(exits)
+        elif exits.get("front"):
             arch(409, 81, 591, 276, "#4d5c64", seam)
             arch(426, 101, 574, 274, "#0a1118", edge)
             poly((426, 274, 574, 274, 594, 288, 405, 288), "#536168", seam, tag="view-exit")
             line((446, 145, 446, 269), "#192731", 2, "view-exit")
             line((554, 145, 554, 269), "#192731", 2, "view-exit")
-        else:
+        elif not has_room_art:
             oval(465, 115, 535, 185, side, edge, 3)
             poly((500, 125, 521, 147, 510, 172, 490, 172, 479, 147), wall, edge, 2)
             line((500, 133, 500, 165), seam, 3)
-        for mirror, relative in ((False, "left"), (True, "right")):
+        for mirror, relative in (() if has_room_art else ((False, "left"), (True, "right"))):
             if exits.get(relative):
                 def xx(x):
                     return 1000 - x if mirror else x
@@ -447,51 +514,52 @@ def draw_dungeon_view(canvas, width: float, height: float, view: dict, *, animat
                       xx(180), 274, xx(47), 337), "#111b22", edge, 3, "view-exit")
                 line((xx(57), 145, xx(161), 148, xx(168), 164,
                       xx(168), 270, xx(57), 320), "#33434d", 2, "view-exit")
-        # Floor-specific motifs are authored geometry, not downloaded textures.
-        if floor == 2:
-            for mirror in (False, True):
-                def xx(x):
-                    return 1000 - x if mirror else x
-                line((xx(32), 0, xx(84), 75, xx(71), 143, xx(135), 210,
-                      xx(185), 267, xx(234), 310), "#475b3d", 10, "view-decoration")
-                line((xx(84), 76, xx(153), 84, xx(186), 134), "#5d714b", 5, "view-decoration")
-                for x, y in ((80, 92), (115, 197), (181, 259)):
-                    poly((xx(x), y, xx(x + 31), y - 10, xx(x + 23), y + 12),
-                         "#637b4d", tag="view-decoration")
-        elif floor == 3:
-            for x in (292, 694):
-                line((x, 70, x, 246), "#86634b", 9, "view-decoration")
-                for y in (100, 161, 220):
-                    line((x - 7, y, x + 7, y), "#bd8756", 3, "view-decoration")
-            for x in (337, 649):
-                rect(x, 221, x + 26, 256, "#1f2021", "#6a4c3d", 3, "view-decoration")
-                for gx in range(x + 5, x + 25, 7):
-                    line((gx, 226, gx, 250), "#d48a49", 2, "view-decoration")
-            line((302, 361, 333, 343, 321, 329, 355, 311), "#986049", 3, "view-decoration")
-        elif floor == 4:
-            for x, y in ((135, 25), (283, 38), (420, 17), (604, 39), (753, 24), (896, 41)):
-                line((x - 3, y, x + 3, y), "#a0acc8", 1, "view-decoration")
-                line((x, y - 3, x, y + 3), "#a0acc8", 1, "view-decoration")
-            for x in (300, 684):
-                poly((x, 110, x + 15, 93, x + 28, 112, x + 17, 153),
-                     "#52566e", "#949bb8", 2, "view-decoration")
-        elif floor == 5:
-            for x in (298, 674):
-                line((x, 82, x + 14, 133, x + 5, 182, x + 22, 252),
-                     "#82545d", 7, "view-decoration")
-                for y in (119, 176, 226):
-                    line((x + 7, y, x + 34, y + 11), "#a26a72", 3, "view-decoration")
-            oval(397, 298, 603, 350, "", "#9d6972", 2, "view-decoration")
-            for i in range(8):
-                a = i * pi / 4
-                x, y = 500 + 84 * cos(a), 324 + 19 * sin(a)
-                line((x - 4, y, x + 4, y), accent, 2, "view-decoration")
-        else:
-            line((294, 82, 306, 111, 296, 124, 313, 153), seam, 3)
-            line((708, 201, 688, 214, 701, 239, 691, 260), seam, 3)
+        if not has_room_art:
+            # Floor-specific motifs are authored geometry, not downloaded textures.
+            if floor == 2:
+                for mirror in (False, True):
+                    def xx(x):
+                        return 1000 - x if mirror else x
+                    line((xx(32), 0, xx(84), 75, xx(71), 143, xx(135), 210,
+                          xx(185), 267, xx(234), 310), "#475b3d", 10, "view-decoration")
+                    line((xx(84), 76, xx(153), 84, xx(186), 134), "#5d714b", 5, "view-decoration")
+                    for x, y in ((80, 92), (115, 197), (181, 259)):
+                        poly((xx(x), y, xx(x + 31), y - 10, xx(x + 23), y + 12),
+                             "#637b4d", tag="view-decoration")
+            elif floor == 3:
+                for x in (292, 694):
+                    line((x, 70, x, 246), "#86634b", 9, "view-decoration")
+                    for y in (100, 161, 220):
+                        line((x - 7, y, x + 7, y), "#bd8756", 3, "view-decoration")
+                for x in (337, 649):
+                    rect(x, 221, x + 26, 256, "#1f2021", "#6a4c3d", 3, "view-decoration")
+                    for gx in range(x + 5, x + 25, 7):
+                        line((gx, 226, gx, 250), "#d48a49", 2, "view-decoration")
+                line((302, 361, 333, 343, 321, 329, 355, 311), "#986049", 3, "view-decoration")
+            elif floor == 4:
+                for x, y in ((135, 25), (283, 38), (420, 17), (604, 39), (753, 24), (896, 41)):
+                    line((x - 3, y, x + 3, y), "#a0acc8", 1, "view-decoration")
+                    line((x, y - 3, x, y + 3), "#a0acc8", 1, "view-decoration")
+                for x in (300, 684):
+                    poly((x, 110, x + 15, 93, x + 28, 112, x + 17, 153),
+                         "#52566e", "#949bb8", 2, "view-decoration")
+            elif floor == 5:
+                for x in (298, 674):
+                    line((x, 82, x + 14, 133, x + 5, 182, x + 22, 252),
+                         "#82545d", 7, "view-decoration")
+                    for y in (119, 176, 226):
+                        line((x + 7, y, x + 34, y + 11), "#a26a72", 3, "view-decoration")
+                oval(397, 298, 603, 350, "", "#9d6972", 2, "view-decoration")
+                for i in range(8):
+                    a = i * pi / 4
+                    x, y = 500 + 84 * cos(a), 324 + 19 * sin(a)
+                    line((x - 4, y, x + 4, y), accent, 2, "view-decoration")
+            else:
+                line((294, 82, 306, 111, 296, 124, 313, 153), seam, 3)
+                line((708, 201, 688, 214, 701, 239, 691, 260), seam, 3)
 
-        torch(358, 145)
-        torch(642, 145)
+            torch(358, 145)
+            torch(642, 145)
         features_visible = not view.get("in_combat") and not view.get("enemy")
         if features_visible and view.get("portal"):
             portal()

@@ -7,6 +7,7 @@ A drawing cannot reveal the contents of a neighboring or unexplored room.
 from collections.abc import Mapping
 
 from equipment import EQUIPMENT
+from room_art_catalog import room_art_for
 
 
 DIRECTIONS = ("north", "east", "south", "west")
@@ -70,7 +71,7 @@ def first_person_data(state: dict, facing: str = "north") -> dict:
     encounter = encounter if isinstance(encounter, Mapping) else {}
     result = {
         "scene": scene, "floor": floor, "theme": theme, "facing": facing,
-        "room_name": "Unexplored chamber",
+        "room_name": "Unexplored chamber", "room_art_id": None,
         "exits": dict.fromkeys(("front", "left", "right", "back"), False),
         "enemy": None, "loot": False, "note": False, "portal": False,
         "class_id": class_id,
@@ -96,6 +97,8 @@ def first_person_data(state: dict, facing: str = "north") -> dict:
         return result
     name = room.get("name", "Dungeon chamber")
     result["room_name"] = name if isinstance(name, str) else "Dungeon chamber"
+    art = room_art_for(floor, result["room_name"])
+    result["room_art_id"] = art.id if art is not None else None
     exits = room.get("exits")
     exits = exits if isinstance(exits, Mapping) else {}
     result["exits"] = {

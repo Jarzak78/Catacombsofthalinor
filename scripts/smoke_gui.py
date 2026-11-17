@@ -8,6 +8,9 @@ from tempfile import TemporaryDirectory
 
 
 REQUIRED_CHECKS = frozenset({
+    "room_art_current_room", "room_art_combat_layers", "room_art_all_60_panels",
+    "room_art_all_15_passages",
+    "room_art_landmark_clearance",
     "sword_forward_shield_back",
     "weapon_swing_reaction", "animation_gameplay_purity", "wizard_spell_effect",
     "animated_defeat_cleanup", "animation_restart_cleanup",
@@ -38,7 +41,7 @@ def main() -> int:
         result = subprocess.run(
             [str(executable), "--ui-smoke-report", str(report_path),
              "--name", "Tarin", "--seed", "7", "--floors", "5"],
-            cwd=working_directory, timeout=90,
+            cwd=working_directory, timeout=180,
         )
         if not report_path.is_file():
             raise RuntimeError(f"The desktop did not write its smoke report (exit {result.returncode}).")

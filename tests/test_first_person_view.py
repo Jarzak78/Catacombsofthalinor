@@ -7,6 +7,7 @@ import unittest
 from equipment import make_equipment
 from game import Game
 from loot_library import Loot
+from room_art_catalog import room_art_for
 from room import Enemy
 from ui_controller import DesktopSession
 from view_model import first_person_data
@@ -267,6 +268,45 @@ class FirstPersonViewTests(unittest.TestCase):
         first["exits"]["front"] = False
         self.assertNotEqual(first, second)
         self.assertEqual(first_person_data(state), second)
+
+    def test_authored_art_identifies_only_the_current_visited_room(self):
+        state = self.state()
+        state["rooms"][0]["name"] = "The Tangled Threshold"
+        expected = room_art_for(2, "The Tangled Threshold").id
+        state["rooms"].append({"position": [1, 0], "visited": False,
+                                "name": "The Gardener's Crypt",
+                                "description": "SECRET ROOM DESCRIPTION"})
+        original = copy.deepcopy(state)
+        view = first_person_data(state)
+        self.assertEqual(view["room_art_id"], expected)
+        self.assertNotIn("SECRET", json.dumps(view))
+        self.assertNotIn("The Gardener's Crypt", json.dumps(view))
+        self.assertNotIn("description", view)
+        view["room_art_id"] = "CHANGED"
+        self.assertEqual(state, original)
+        self.assertEqual(first_person_data(state)["room_art_id"], expected)
+        state["position"] = [1, 0]
+        self.assertIsNone(first_person_data(state)["room_art_id"])
+
+    def test_room_painting_remains_visible_in_combat_without_revealing_loot(self):
+        state = self.state()
+        state["rooms"][0].update(name="The Drowned Nursery",
+                                 enemy={"name": "Sapglass Beetle", "hp": 7},
+                                 loot={"gold": 123456, "items": ["SECRET JEWEL"]})
+        view = first_person_data(state)
+        self.assertEqual(view["room_art_id"], room_art_for(2, "The Drowned Nursery").id)
+        self.assertTrue(view["in_combat"])
+        self.assertFalse(view["loot"])
+        self.assertNotIn("SECRET", json.dumps(view))
+        self.assertNotIn("123456", json.dumps(view))
+
+    def test_unknown_and_sanctuary_rooms_use_no_dungeon_painting(self):
+        state = self.state()
+        self.assertIsNone(first_person_data(state)["room_art_id"])
+        state["rooms"][0]["name"] = "The Tangled Threshold"
+        state["scene"] = "shop"
+        self.assertIsNone(first_person_data(state)["room_art_id"])
+        self.assertIsNone(first_person_data(DesktopSession(seed=7).get_state())["room_art_id"])
 
 
 if __name__ == "__main__":

@@ -405,6 +405,32 @@ When the room is safe, a container or document can be visible, but
 lore. An unlocked guardian portal is visible only in its own chamber.
 The illustration updates after commands, defeat, shopping, and descent.
 
+Every authored dungeon room now has its own background painting: 60 scenes
+across the five floors, including entrances and guardian chambers. Art
+matches the room's named landmarks and atmosphere, such as the Rootbound
+Vault's pale roots and coffins, the Drowned Nursery's broken seed jars,
+the Chain Foundry's casting molds, the Mirror Prison's covered mirrors,
+and the Hollow Throne's bedrock seat and converging chains. The room's
+identity selects its painting even when a new seed places it elsewhere.
+Camera turns keep the room portrait and update the actual exit overlays.
+Those exits use textured passageways matched to each floor's materials:
+weathered limestone, mossy roots, forge iron, dark vault marble, and royal
+bedrock. Left, front, and right openings have their own perspectives and
+transparent edges, so they blend with the scenery. Only passages that
+exist in the current room are shown.
+Rear passages use authored wall positions for each room, keeping landmarks
+such as the massive anvil, altars, wells, murals, and thrones clear.
+In a few rooms, large fixtures obscure the far passage; the movement
+controls and minimap still show the known route.
+
+Room paintings contain scenery. Live enemies, adventurer hands, combat
+effects, collectible treasure and documents, and unlocked portals remain
+separate layers. Collecting loot or defeating a guardian therefore updates
+the interactive features without leaving a painted enemy or treasure pile
+behind. Only the current visited room can select a painting; neighboring
+and unexplored room contents stay hidden. An unavailable painting falls
+back to the original procedural room view.
+
 The view combines perspective canvas architecture with original textured
 PNG artwork for hands, weapons, creatures, all five guardians, and Mira.
 The foreground includes sword-and-shield, greatsword, greataxe, rapier,
@@ -438,6 +464,10 @@ it. `combat_animation.py` converts resolved events into presentation-only
 poses and original Canvas effects. The terminal, minimap, and existing
 command controls remain available.
 Source and generation records are in `assets/realistic/asset_sources.json`.
+Room and doorway prompts, the panel-to-description mapping, and exact hashes
+are recorded in `assets/rooms/asset_sources.json`. The five room atlases,
+the doorway atlas, and their provenance are embedded and checked in the Windows build; the
+release's license reader includes `legal/room-artwork-sources.json`.
 The GUI executable embeds and verifies the artwork and provenance; the
 terminal executable keeps its text interface without loading these images.
 

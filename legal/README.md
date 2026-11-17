@@ -193,3 +193,30 @@ spell projectiles, impacts, and wards with standard Tk Canvas primitives.
 No outside animation, image, audio, font, or code pack was imported, and
 no new third-party runtime dependency was added. The atlas provenance and
 all existing SRD and runtime notices remain applicable and unchanged.
+
+### Room portraits matched to the authored dungeon
+
+Five opaque room atlases in `assets/rooms/` were generated for this project
+with OpenAI's image-generation tool. Each atlas contains twelve portraits:
+its floor's entrance, ten ordinary chambers, and guardian chamber. The
+prompts use the project's room descriptions and request original fantasy
+architecture without outside artwork, franchise references, logos, or
+named-artist styles. Existing creature and adventurer artwork is composited
+above these backgrounds; the room portraits introduce no new runtime library.
+
+`assets/rooms/asset_sources.json` records generation prompts, cell ordering,
+source hashes, and qualified rights information. The Windows bundle keeps
+an identical readable copy as `legal/room-artwork-sources.json`. Release
+checks require all five atlases and their provenance hashes and verify the
+embedded files byte for byte. These records do not guarantee uniqueness,
+copyrightability, exclusive ownership, or comprehensive legal clearance.
+Existing SRD attribution, runtime notices, and the owner's unresolved choice
+of a general project license remain unchanged.
+
+The same room source record also covers `assets/rooms/doorways.png`, an
+original generated transparent atlas containing fifteen doorway cutouts:
+left, front, and right views for each of the five floors. These cutouts
+provide textured passages that follow the current room's actual exits.
+Their source hash, three-column/five-row layout, transparency requirement,
+and embedded bytes are included in the release verification alongside the
+room portraits. No outside texture pack or runtime dependency is added.

@@ -1,6 +1,7 @@
 """Exercise original view geometry without creating a Tk root or a game."""
 
 import math
+from copy import deepcopy
 from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
@@ -52,6 +53,89 @@ def room_view(**changes):
 
 
 class DungeonArtTests(unittest.TestCase):
+    def room_picture(self, canvas, width, height, identifier, *, tags=()):
+        canvas._create("image", (0, 0, width, height),
+                       {"tags": (*tags, "view-room-art", "room-art-" + identifier)})
+        return True
+
+    def test_room_picture_replaces_generic_walls_motifs_and_torches(self):
+        for floor in range(1, 6):
+            with self.subTest(floor=floor):
+                canvas = RecordingCanvas()
+                identifier = f"floor_{floor}_room_04"
+                with patch("dungeon_view.draw_room_art", side_effect=self.room_picture):
+                    draw_dungeon_view(canvas, 1000, 400, room_view(
+                        floor=floor, room_art_id=identifier, exits={}))
+                self.assertEqual(len(canvas.tagged("view-room-art")), 1)
+                self.assertEqual(len(canvas.tagged("view-wall")), 2)  # Base fill + picture.
+                self.assertFalse(canvas.tagged("view-decoration"))
+                self.assertTrue(canvas.tagged("view-hands"))
+                self.assertTrue(canvas.tagged("view-frame"))
+
+    def test_room_picture_keeps_only_actual_exits_and_stays_behind_combat(self):
+        canvas = RecordingCanvas()
+        enemy = {"name": "Bone Sentry", "boss": False, "archetype": "skeleton"}
+        with patch("dungeon_view.draw_room_art", side_effect=self.room_picture):
+            draw_dungeon_view(canvas, 1000, 400, room_view(
+                room_art_id="floor_1_room_06", enemy=enemy, in_combat=True,
+                exits={"right": True}, loot=True, note=True, portal=True))
+        self.assertTrue(canvas.tagged("view-exit"))
+        self.assertTrue(canvas.tagged("view-enemy"))
+        picture = canvas.tagged("view-room-art")[0]
+        self.assertLess(picture["id"], min(item["id"] for item in canvas.tagged("view-exit")))
+        self.assertLess(picture["id"], min(item["id"] for item in canvas.tagged("view-enemy")))
+        self.assertLess(picture["id"], min(item["id"] for item in canvas.tagged("view-hands")))
+        for tag in ("view-loot", "view-note", "view-portal"):
+            self.assertFalse(canvas.tagged(tag))
+
+    def test_painted_rooms_use_textured_passages_only_for_actual_visible_exits(self):
+        canvas = RecordingCanvas()
+        def passage(canvas, width, height, floor, relative, *, tags=(), room_art_id=None):
+            canvas._create("image", (0, 0), {"tags": (*tags, "view-exit-art", relative)})
+            return True
+        with patch("dungeon_view.draw_room_art", side_effect=self.room_picture), patch(
+                "dungeon_view.draw_exit_art", side_effect=passage) as exits:
+            draw_dungeon_view(canvas, 1000, 400, room_view(
+                floor=3, room_art_id="floor_3_room_07", exits={"right": True, "back": True}))
+        self.assertEqual(exits.call_count, 1)
+        self.assertEqual(exits.call_args.args[-2:], (3, "right"))
+        self.assertEqual(len(canvas.tagged("view-exit")), 1)
+        self.assertEqual(len(canvas.tagged("view-exit-art")), 1)
+        self.assertEqual(canvas.tagged("view-exit")[0]["kind"], "image")
+
+    def test_obstructed_painted_far_wall_keeps_route_flags_without_a_false_door(self):
+        canvas = RecordingCanvas()
+        view = room_view(floor=3, room_art_id="floor_3_room_10", exits={"front": True})
+        original = deepcopy(view)
+        with patch("dungeon_view.draw_room_art", side_effect=self.room_picture):
+            draw_dungeon_view(canvas, 1000, 400, view)
+        self.assertFalse(canvas.tagged("view-exit"))
+        self.assertTrue(canvas.tagged("view-room-art"))
+        self.assertTrue(canvas.tagged("view-hands"))
+        self.assertEqual(view, original)
+
+    def test_room_picture_preserves_safe_props_and_is_never_used_in_the_sanctuary(self):
+        canvas = RecordingCanvas()
+        with patch("dungeon_view.draw_room_art", side_effect=self.room_picture) as picture:
+            draw_dungeon_view(canvas, 650, 240, room_view(
+                room_art_id="floor_1_room_03", loot=True, note=True, portal=True))
+            for tag in ("view-loot", "view-note", "view-portal"):
+                self.assertTrue(canvas.tagged(tag))
+            picture.reset_mock()
+            draw_dungeon_view(canvas, 650, 240, room_view(
+                scene="shop", room_art_id="floor_1_room_03"))
+            picture.assert_not_called()
+        self.assertFalse(canvas.tagged("view-room-art"))
+        self.assertTrue(canvas.tagged("view-sanctuary"))
+
+    def test_missing_room_picture_keeps_the_procedural_fallback(self):
+        canvas = RecordingCanvas()
+        with patch("dungeon_view.draw_room_art", return_value=False):
+            draw_dungeon_view(canvas, 650, 240, room_view(room_art_id="floor_1_room_00"))
+        self.assertGreater(len(canvas.tagged("view-wall")), 20)
+        self.assertTrue(canvas.tagged("view-decoration"))
+        self.assertTrue(canvas.tagged("view-hands"))
+
     def test_all_floors_and_classes_render_at_small_default_and_large_sizes(self):
         backgrounds = set()
         for floor in range(1, 6):

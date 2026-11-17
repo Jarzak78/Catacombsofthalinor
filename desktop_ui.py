@@ -869,6 +869,9 @@ def run_gui_smoke(report_path: Path, name: str = "Adventurer", seed: int | None 
         assert app.view_canvas.find_withtag(VIEW_TAG) and app.view_canvas.find_withtag("view-wall")
         assert app.view_canvas.winfo_height() > 100 and app.view_state["class_id"] == "rogue"
         checks.append("first_person_view")
+        assert app.view_state["room_art_id"] == "floor_1_room_00"
+        assert app.view_canvas.find_withtag("room-art-floor_1_room_00")
+        checks.append("room_art_current_room")
         before = app.session.game.get_state()
         camera_rng = app.session.game.rng.getstate()
         camera_history = list(app.history)
@@ -931,6 +934,15 @@ def run_gui_smoke(report_path: Path, name: str = "Adventurer", seed: int | None 
         assert app.view_canvas.find_withtag("view-enemy")
         assert not app.view_canvas.find_withtag("view-loot") and not app.view_canvas.find_withtag("view-note")
         checks.append("view_combat")
+        from room_art_catalog import room_art_for
+        expected_art = room_art_for(game.floor, game.room.name)
+        assert app.view_state["room_art_id"] == expected_art.id
+        painted = app.view_canvas.find_withtag("room-art-" + expected_art.id)
+        assert painted
+        stack = list(app.view_canvas.find_all())
+        assert stack.index(painted[0]) < stack.index(app.view_canvas.find_withtag("view-enemy")[0])
+        assert stack.index(painted[0]) < stack.index(app.view_canvas.find_withtag("view-hands")[0])
+        checks.append("room_art_combat_layers")
         bonus_before = game.bonus_action_available
         app.class_action.invoke()
         root.update()
@@ -1143,6 +1155,42 @@ def run_gui_smoke(report_path: Path, name: str = "Adventurer", seed: int | None 
         picture(sample, "mira")
         assert gear_game.get_state() == protected_state and gear_game.rng.getstate() == protected_rng
         checks.append("realistic_sanctuary")
+
+        # Decode every shipped room panel into actual native images. A small
+        # offscreen Canvas keeps this exhaustive resource check inexpensive.
+        from room_art import draw_exit_art, draw_room_art
+        from room_art_catalog import ROOM_ART_BY_ID
+        room_probe = tk.Canvas(root, width=320, height=120)
+        for art_id in ROOM_ART_BY_ID:
+            room_probe.delete("all")
+            assert draw_room_art(room_probe, 320, 120, art_id), art_id
+            painted = room_probe.find_withtag("room-art-" + art_id)
+            assert len(painted) == 1 and room_probe.type(painted[0]) == "image", art_id
+        for floor in range(1, 6):
+            for relative in ("left", "front", "right"):
+                room_probe.delete("all")
+                assert draw_exit_art(room_probe, 320, 120, floor, relative), (floor, relative)
+                painted = room_probe.find_withtag("view-exit-art")
+                assert len(painted) == 1 and room_probe.type(painted[0]) == "image"
+        checks.append("room_art_all_15_passages")
+        # A rear exit belongs on the wall beside the massive anvil. Exercise
+        # the complete renderer so a future fixed-center overlay cannot put
+        # the passage back through the middle of this landmark.
+        landmark_view = deepcopy(sample)
+        landmark_view.update(scene="dungeon", floor=3, room_name="The Broken Anvil",
+                             room_art_id=room_art_for(3, "The Broken Anvil").id,
+                             enemy=None, in_combat=False,
+                             exits={"front": True, "left": False, "right": False, "back": True})
+        room_probe.delete("all")
+        draw_dungeon_view(room_probe, 1000, 400, landmark_view)
+        opening = room_probe.find_withtag("exit-art-front")
+        assert len(opening) == 1 and room_probe.type(opening[0]) == "image"
+        assert room_probe.bbox(opening[0])[0] >= 650, "A doorway must not cut into the anvil."
+        checks.append("room_art_landmark_clearance")
+        room_probe.destroy()
+        assert len(ROOM_ART_BY_ID) == 60
+        assert gear_game.get_state() == protected_state and gear_game.rng.getstate() == protected_rng
+        checks.append("room_art_all_60_panels")
 
         fighter = Game(name="Sword tester", seed=7)
         fighter.room.enemy = Enemy("Bone Sentry", 500, 500, 1, 3, (1, 6), 1, 50, 3)
