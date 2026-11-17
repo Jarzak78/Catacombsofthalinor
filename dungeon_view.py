@@ -42,22 +42,36 @@ def draw_dungeon_view(canvas, width: float, height: float, view: dict, *, animat
     sx, sy = width / 1000, height / 400
 
     def shape_pose(tag):
-        if tag in ("view-hands", "view-shield"):
-            scale = .65 * animation.get("hands_scale", 1)
-            return (500, 403, scale, scale, animation.get("hands_angle", 0),
-                    animation.get("hands_dx", 0), animation.get("hands_dy", 0))
+        if tag in ("view-hands", "view-shield", "view-offhand", "view-weapon"):
+            offhand = tag in ("view-shield", "view-offhand")
+            prefix = "offhand" if offhand else "hands"
+            scale = animation.get(prefix + "_scale", 1)
+            return (300 if offhand else 680, 403, scale, scale,
+                    animation.get(prefix + "_angle", 0), animation.get(prefix + "_dx", 0),
+                    animation.get(prefix + "_dy", 0), .65)
         if tag == "view-enemy":
             return (500, 307, animation.get("enemy_scale_x", 1),
                     animation.get("enemy_scale_y", 1), animation.get("enemy_angle", 0),
-                    animation.get("enemy_dx", 0), animation.get("enemy_dy", 0))
-        return (0, 0, 1, 1, 0, 0, 0)
+                    animation.get("enemy_dx", 0), animation.get("enemy_dy", 0), 1)
+        return (0, 0, 1, 1, 0, 0, 0, 1)
+
+    def shape_tags(tag):
+        if tag == "view-shield":
+            return (VIEW_TAG, tag, "view-hands", "view-offhand")
+        if tag == "view-offhand":
+            return (VIEW_TAG, tag, "view-hands")
+        if tag == "view-hands":
+            return (VIEW_TAG, tag, "view-weapon")
+        return (VIEW_TAG, tag)
 
     def points(values, tag="view-wall"):
-        px, py, scale_x, scale_y, angle, dx, dy = shape_pose(tag)
+        px, py, scale_x, scale_y, angle, dx, dy, base_scale = shape_pose(tag)
         cosine, sine = cos(angle * pi / 180), sin(angle * pi / 180)
         output = []
         for i in range(0, len(values), 2):
-            x, y = (values[i] - px) * scale_x, (values[i + 1] - py) * scale_y
+            x = 500 + (values[i] - 500) * base_scale if base_scale != 1 else values[i]
+            y = 403 + (values[i + 1] - 403) * base_scale if base_scale != 1 else values[i + 1]
+            x, y = (x - px) * scale_x, (y - py) * scale_y
             output.extend(((px + x * cosine - y * sine + dx) * sx,
                            (py + x * sine + y * cosine + dy) * sy))
         return output
@@ -65,7 +79,7 @@ def draw_dungeon_view(canvas, width: float, height: float, view: dict, *, animat
     def poly(values, fill, outline="", weight=1, tag="view-wall"):
         canvas.create_polygon(*points(values, tag), fill=fill, outline=outline,
                               width=max(1, weight * min(sx, sy)),
-                              tags=((VIEW_TAG, tag, "view-hands") if tag == "view-shield" else (VIEW_TAG, tag)))
+                              tags=shape_tags(tag))
 
     def rect(x1, y1, x2, y2, fill, outline="", weight=1, tag="view-wall"):
         if shape_pose(tag)[4]:
@@ -74,7 +88,7 @@ def draw_dungeon_view(canvas, width: float, height: float, view: dict, *, animat
         canvas.create_rectangle(*points((x1, y1, x2, y2), tag),
                                 fill=fill, outline=outline,
                                 width=max(1, weight * min(sx, sy)),
-                                tags=((VIEW_TAG, tag, "view-hands") if tag == "view-shield" else (VIEW_TAG, tag)))
+                                tags=shape_tags(tag))
 
     def oval(x1, y1, x2, y2, fill, outline="", weight=1, tag="view-wall"):
         if shape_pose(tag)[4]:
@@ -88,13 +102,13 @@ def draw_dungeon_view(canvas, width: float, height: float, view: dict, *, animat
         canvas.create_oval(*points((x1, y1, x2, y2), tag),
                            fill=fill, outline=outline,
                            width=max(1, weight * min(sx, sy)),
-                           tags=((VIEW_TAG, tag, "view-hands") if tag == "view-shield" else (VIEW_TAG, tag)))
+                           tags=shape_tags(tag))
 
     def line(values, fill, weight=1, tag="view-wall"):
         canvas.create_line(*points(values, tag), fill=fill,
                            width=max(1, weight * min(sx, sy)),
                            capstyle="round", joinstyle="round",
-                           tags=((VIEW_TAG, tag, "view-hands") if tag == "view-shield" else (VIEW_TAG, tag)))
+                           tags=shape_tags(tag))
 
     def arch(x1, top, x2, bottom, fill, outline="", tag="view-exit"):
         cx, rx = (x1 + x2) / 2, (x2 - x1) / 2
@@ -264,9 +278,29 @@ def draw_dungeon_view(canvas, width: float, height: float, view: dict, *, animat
 
     def hands(class_id):
         sprite_key = hand_sprite_key(view)
-        tags = (VIEW_TAG, "view-hands", "view-shield") if sprite_key == "sword_shield" else (VIEW_TAG, "view-hands")
+        if sprite_key in ("sword_shield", "rogue_rapier"):
+            offhand_tags = (VIEW_TAG, "view-hands", "view-offhand")
+            if sprite_key == "sword_shield":
+                offhand_tags += ("view-shield",)
+            offhand = draw_sprite(canvas, sprite_key,
+                width * .5 + animation.get("offhand_dx", 0) * sx,
+                height + (3 + animation.get("offhand_dy", 0)) * sy,
+                width * .72, height * .62, anchor="s", tags=offhand_tags,
+                angle=animation.get("offhand_angle", 0),
+                stretch_x=animation.get("offhand_scale", 1),
+                stretch_y=animation.get("offhand_scale", 1), layer="offhand", pivot=(.14, 1))
+            weapon = draw_sprite(canvas, sprite_key,
+                width * .5 + animation.get("hands_dx", 0) * sx,
+                height + (3 + animation.get("hands_dy", 0)) * sy,
+                width * .72, height * .62, anchor="s", tags=(VIEW_TAG, "view-hands", "view-weapon"),
+                angle=animation.get("hands_angle", 0),
+                stretch_x=animation.get("hands_scale", 1),
+                stretch_y=animation.get("hands_scale", 1), layer="weapon", pivot=(.88, 1))
+            if offhand and weapon:
+                return
+        tags = (VIEW_TAG, "view-hands", "view-weapon")
         heavy = sprite_key in ("greatsword", "greataxe")
-        if draw_sprite(canvas, sprite_key,
+        if sprite_key not in ("sword_shield", "rogue_rapier") and draw_sprite(canvas, sprite_key,
                        width * (.65 if heavy else .5) + animation.get("hands_dx", 0) * sx,
                        height + (3 + animation.get("hands_dy", 0)) * sy,
                        width * (.50 if heavy else .72), height * (.60 if heavy else .62),
@@ -290,15 +324,16 @@ def draw_dungeon_view(canvas, width: float, height: float, view: dict, *, animat
             oval(232, 281, 272, 307, "#91c9db", "#d1f1ec", 2, "view-hands")
         elif class_id == "rogue":
             for mirror in (False, True):
+                tag = "view-hands" if mirror else "view-offhand"
                 def xx(x):
                     return 1000 - x if mirror else x
                 poly((xx(166), 400, xx(210), 353, xx(260), 351, xx(293), 400),
-                     glove, "#17212a", 2, "view-hands")
+                     glove, "#17212a", 2, tag)
                 poly((xx(218), 354, xx(236), 328, xx(257), 342, xx(255), 365),
-                     "#887463", "#343136", 2, "view-hands")
+                     "#887463", "#343136", 2, tag)
                 poly((xx(237), 331, xx(244), 289, xx(276), 239, xx(257), 303, xx(250), 340),
-                     "#b7c5c7", "#52616b", 2, "view-hands")
-                line((xx(225), 334, xx(262), 346), "#ad9058", 5, "view-hands")
+                     "#b7c5c7", "#52616b", 2, tag)
+                line((xx(225), 334, xx(262), 346), "#ad9058", 5, tag)
         else:
             # These are class illustrations; the shield respects actual handedness.
             if not view.get("two_handed"):

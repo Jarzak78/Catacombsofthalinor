@@ -8,6 +8,7 @@ from tempfile import TemporaryDirectory
 
 
 REQUIRED_CHECKS = frozenset({
+    "sword_forward_shield_back",
     "weapon_swing_reaction", "animation_gameplay_purity", "wizard_spell_effect",
     "animated_defeat_cleanup", "animation_restart_cleanup",
     "realistic_hands", "realistic_enemies", "realistic_sanctuary",

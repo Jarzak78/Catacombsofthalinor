@@ -416,7 +416,9 @@ visible archetype; the five guardians each have their own artwork.
 Hands and weapons sit lower and occupy roughly one third less height than
 the earlier view, leaving more space around the unchanged enemy artwork.
 Attacks animate a brief weapon swing or a spell projectile, frost shard,
-arcane missiles, or fire burst. Foes block close misses, dodge wider misses,
+arcane missiles, or fire burst. The sword arm swings forward toward the foe
+while the shield arm pulls back toward the adventurer; each arm moves
+independently. Foes block close misses, dodge wider misses,
 brace against light hits, and flinch or stagger under stronger blows.
 Defeated foes collapse and fade before the safe room's props return.
 Critical hits have a distinct golden impact, while the reaction's strength

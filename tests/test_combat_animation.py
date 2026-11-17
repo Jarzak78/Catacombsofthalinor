@@ -135,7 +135,9 @@ class TimelineTests(unittest.TestCase):
                   attack(kind="firebolt"), attack(kind="shield", hit=False)]
         neutral = {"enemy_dx": 0, "enemy_dy": 0, "enemy_angle": 0,
                    "enemy_scale_x": 1, "enemy_scale_y": 1, "enemy_opacity": 1,
-                   "hands_dx": 0, "hands_dy": 0, "hands_angle": 0, "hands_scale": 1}
+                   "hands_dx": 0, "hands_dy": 0, "hands_angle": 0, "hands_scale": 1,
+                   "offhand_dx": 0, "offhand_dy": 0,
+                   "offhand_angle": 0, "offhand_scale": 1}
         for event in events:
             for progress in (0, 1):
                 with self.subTest(kind=event["kind"], pose=classify_reaction(event), p=progress):
@@ -171,9 +173,11 @@ class TimelineTests(unittest.TestCase):
             enemy_keys = {(f["enemy_angle"], f["enemy_scale_x"], f["enemy_scale_y"],
                            f["enemy_opacity"]) for f in frames}
             hand_keys = {(f["hands_angle"], f["hands_scale"]) for f in frames}
+            offhand_keys = {(f["offhand_angle"], f["offhand_scale"]) for f in frames}
             with self.subTest(pose=classify_reaction(event)):
                 self.assertLessEqual(len(enemy_keys), 4)
                 self.assertLessEqual(len(hand_keys), 4)
+                self.assertLessEqual(len(offhand_keys), 4)
                 self.assertGreater(len({f["enemy_dy"] for f in frames}), 5)
 
 
@@ -192,6 +196,31 @@ class EffectGeometryTests(unittest.TestCase):
         late = animation_frame(attack(), .5)
         self.assertNotEqual(early["hands_dx"], late["hands_dx"])
         self.assertNotEqual(early["hands_angle"], late["hands_angle"])
+
+    def test_sword_crosses_foe_torso_while_shield_retracts_independently(self):
+        frame = animation_frame(attack(), .5)
+        # Reference points from the current sword art, on the 1000x400 stage:
+        # the blade begins on the right and rotates around its lower forearm.
+        # Project its visible segment, rather than merely asserting an angle.
+        pivot = (695, 403)
+
+        def transformed(x, y):
+            angle = math.radians(frame["hands_angle"])
+            x, y = x - pivot[0], y - pivot[1]
+            return (pivot[0] + x * math.cos(angle) - y * math.sin(angle) + frame["hands_dx"],
+                    pivot[1] + x * math.sin(angle) + y * math.cos(angle) + frame["hands_dy"])
+
+        tip, hilt = transformed(553, 188), transformed(632, 314)
+        self.assertLess(tip[0], 500)
+        self.assertGreater(hilt[0], 500)
+        crossing_y = tip[1] + (500 - tip[0]) / (hilt[0] - tip[0]) * (hilt[1] - tip[1])
+        self.assertGreater(crossing_y, 180)
+        self.assertLess(crossing_y, 270)
+        self.assertLess(hilt[1], 314)
+        self.assertLess(frame["hands_dy"], 0)
+        self.assertGreater(frame["offhand_dy"], 0)
+        self.assertLess(frame["offhand_scale"], 1)
+        self.assertNotEqual(frame["hands_angle"], frame["offhand_angle"])
 
     def test_wizard_projectiles_are_distinct_and_missile_has_three_orbs(self):
         fire = self.render(attack(kind="firebolt"))

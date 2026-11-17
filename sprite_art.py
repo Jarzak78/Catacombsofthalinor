@@ -37,6 +37,7 @@ SPRITE_REGIONS = {
 }
 _MAX_IMAGES = 48
 _MAX_POSES = 48
+_SPLIT_HANDS = frozenset(("sword_shield", "rogue_rapier"))
 _SIGNATURE = b"\x89PNG\r\n\x1a\n"
 
 
@@ -208,6 +209,28 @@ def _sprite_pixels(key, path, modified, size):
     return x2 - x1 + 1, y2 - y1 + 1, cropped
 
 
+@lru_cache(maxsize=8)
+def _hand_layer_pixels(key, path, modified, size, layer):
+    """Separate disjoint arms while retaining their shared original rectangle.
+
+    The supplied two single-hand grips have a fully transparent center column.
+    Check that separation against alpha before splitting; no visible pixels are
+    cut, moved, recolored, or resized independently in the idle composition.
+    """
+    if key not in _SPLIT_HANDS or layer not in ("offhand", "weapon"):
+        raise ValueError("Sprite has no separate hand layer")
+    width, height, pixels = _sprite_pixels(key, path, modified, size)
+    split = width // 2
+    if any(pixels[(y * width + split) * 4 + 3] for y in range(height)):
+        raise ValueError("Hand layers have no transparent center separation")
+    output = bytearray(pixels)
+    for y in range(height):
+        left, right = ((split, width) if layer == "offhand" else (0, split))
+        start, end = (y * width + left) * 4, (y * width + right) * 4
+        output[start:end] = bytes(end - start)
+    return width, height, bytes(output)
+
+
 def _resize_rgba(width, height, pixels, output_width, output_height):
     """Bilinear filtering in premultiplied alpha prevents dark edge halos."""
     if (width, height) == (output_width, output_height):
@@ -249,9 +272,10 @@ def _encode_png(width, height, rgba):
 
 
 @lru_cache(maxsize=24)
-def _scaled_sprite(key, target_width, target_height, path, modified, size):
+def _scaled_sprite(key, target_width, target_height, path, modified, size, layer=None):
     """Share the expensive base resize between all poses of an avatar."""
-    width, height, pixels = _sprite_pixels(key, path, modified, size)
+    width, height, pixels = (_hand_layer_pixels(key, path, modified, size, layer) if layer
+                             else _sprite_pixels(key, path, modified, size))
     scale = min(min(target_width, 2048) / width, min(target_height, 2048) / height)
     output_width, output_height = max(1, round(width * scale)), max(1, round(height * scale))
     return (output_width, output_height,
@@ -264,11 +288,11 @@ def _target_size(target_width, target_height):
         raise ValueError("Sprite target must have positive finite dimensions")
 
 
-def render_sprite_png(key, target_width, target_height):
+def render_sprite_png(key, target_width, target_height, *, layer=None):
     """Return a smoothly scaled transparent PNG, fitted inside the target box."""
     _target_size(target_width, target_height)
     path, modified, size = _asset_path(key)
-    width, height, pixels = _scaled_sprite(key, target_width, target_height, str(path), modified, size)
+    width, height, pixels = _scaled_sprite(key, target_width, target_height, str(path), modified, size, layer)
     return _encode_png(width, height, pixels)
 
 
@@ -284,7 +308,8 @@ def _pose_values(angle, opacity, stretch_x, stretch_y):
             max(.1, round(min(2.5, stretch_y) * 10) / 10))
 
 
-def _affine_rgba(width, height, pixels, angle, opacity, stretch_x, stretch_y, anchor="center"):
+def _affine_rgba(width, height, pixels, angle, opacity, stretch_x, stretch_y, anchor="center", *,
+                 pivot=None, layout_height=None):
     """Rotate/stretch around the Canvas anchor without clipping or dark halos.
 
     The returned offset positions the expanded PNG relative to that unchanged
@@ -295,7 +320,17 @@ def _affine_rgba(width, height, pixels, angle, opacity, stretch_x, stretch_y, an
                "e": (1, .5), "w": (0, .5), "ne": (1, 0), "nw": (0, 0),
                "se": (1, 1), "sw": (0, 1)}
     ax, ay = anchors.get(anchor, anchors["center"])
-    pivot_x, pivot_y = width * ax, height * ay
+    layout_height = height if layout_height is None else layout_height
+    anchor_x, anchor_y = width * ax, layout_height * ay
+    if angle == 0 and stretch_x == 1 and stretch_y == 1:
+        if opacity != 1:
+            output = bytearray(pixels)
+            output[3::4] = bytes(round(alpha * opacity) for alpha in pixels[3::4])
+            pixels = bytes(output)
+        return width, height, pixels, -anchor_x, -anchor_y
+    pivot_x, pivot_y = ((width * pivot[0], layout_height * pivot[1]) if pivot
+                        else (anchor_x, anchor_y))
+    shift_x, shift_y = pivot_x - anchor_x, pivot_y - anchor_y
     radians = math.radians(angle)
     cosine, sine = math.cos(radians), math.sin(radians)
     cosine = 0 if abs(cosine) < 1e-10 else cosine
@@ -303,7 +338,7 @@ def _affine_rgba(width, height, pixels, angle, opacity, stretch_x, stretch_y, an
     corners = []
     for x, y in ((0, 0), (width, 0), (width, height), (0, height)):
         x, y = (x - pivot_x) * stretch_x, (y - pivot_y) * stretch_y
-        corners.append((x * cosine - y * sine, x * sine + y * cosine))
+        corners.append((x * cosine - y * sine + shift_x, x * sine + y * cosine + shift_y))
     left = math.floor(min(point[0] for point in corners) + 1e-8)
     top = math.floor(min(point[1] for point in corners) + 1e-8)
     right = math.ceil(max(point[0] for point in corners) - 1e-8)
@@ -312,7 +347,7 @@ def _affine_rgba(width, height, pixels, angle, opacity, stretch_x, stretch_y, an
     output = bytearray(output_width * output_height * 4)
     step_x, step_y = cosine / stretch_x, -sine / stretch_y
     for y in range(output_height):
-        wx, wy = left + .5, top + y + .5
+        wx, wy = left + .5 - shift_x, top + y + .5 - shift_y
         source_x = (wx * cosine + wy * sine) / stretch_x + pivot_x - .5
         source_y = (-wx * sine + wy * cosine) / stretch_y + pivot_y - .5
         for x in range(output_width):
@@ -353,39 +388,71 @@ def _affine_rgba(width, height, pixels, angle, opacity, stretch_x, stretch_y, an
     return output_width, output_height, bytes(output), left, top
 
 
+def _continue_forearm(width, height, pixels):
+    """Continue the cropped sleeve with its own texture beneath the viewport.
+
+    Raising an arm exposes the atlas's straight bottom crop.  Reuse a short,
+    mirrored band of that same sleeve below the cut so the arm remains joined
+    to the screen edge throughout its reach, with its original alpha silhouette.
+    """
+    depth = max(1, round(height * .8))
+    band = max(1, min(24, height - 1))
+    edge = pixels[(height - 1) * width * 4:height * width * 4]
+    output = bytearray(pixels)
+    for y in range(depth):
+        phase = y % (band * 2)
+        source_y = height - 1 - (phase if phase < band else band * 2 - 1 - phase)
+        row = bytearray(edge)
+        source = source_y * width * 4
+        for x in range(width):
+            i = x * 4
+            if edge[i + 3] and pixels[source + i + 3]:
+                row[i:i + 3] = pixels[source + i:source + i + 3]
+        output.extend(row)
+    return height + depth, bytes(output)
+
+
 @lru_cache(maxsize=_MAX_POSES)
 def _posed_sprite(key, width, height, path, modified, size, angle, opacity,
-                  stretch_x, stretch_y, anchor):
-    width, height, pixels = _scaled_sprite(key, width, height, path, modified, size)
+                  stretch_x, stretch_y, anchor, layer=None, pivot=None):
+    width, height, pixels = _scaled_sprite(key, width, height, path, modified, size, layer)
+    layout_height = height
+    if layer == "weapon":
+        height, pixels = _continue_forearm(width, height, pixels)
     width, height, pixels, left, top = _affine_rgba(
-        width, height, pixels, angle, opacity, stretch_x, stretch_y, anchor)
+        width, height, pixels, angle, opacity, stretch_x, stretch_y, anchor,
+        pivot=pivot, layout_height=layout_height)
     return _encode_png(width, height, pixels), left, top
 
 
 def draw_sprite(canvas, key, x, y, target_width, target_height, anchor="center", tags=(), *,
-                angle=0, opacity=1, stretch_x=1, stretch_y=1):
+                angle=0, opacity=1, stretch_x=1, stretch_y=1, layer=None, pivot=None):
     """Draw a cached raster sprite or return False for the vector fallback."""
     if not hasattr(canvas, "tk") or not hasattr(canvas, "create_image") or key not in SPRITE_CELLS:
         return False
     try:
         import tkinter as tk
         _target_size(target_width, target_height)
+        if pivot is not None:
+            if len(pivot) != 2 or not all(math.isfinite(value) and 0 <= value <= 1 for value in pivot):
+                raise ValueError("Sprite pivot must be inside its original rectangle")
+            pivot = tuple(pivot)
         path, modified, size = _asset_path(key)
         width, height = round(target_width), round(target_height)
         pose = _pose_values(angle, opacity, stretch_x, stretch_y)
         if pose[1] == 0:
             return True
-        posed = pose != (0, 1, 1, 1)
-        cache_key = (key, width, height, str(path), modified, size, pose, anchor)
+        posed = layer == "weapon" or pose != (0, 1, 1, 1)
+        cache_key = (key, width, height, str(path), modified, size, pose, anchor, layer, pivot)
         images = getattr(canvas, "_dungeon_sprite_images", None)
         if images is None:
             images = canvas._dungeon_sprite_images = OrderedDict()
         if cache_key not in images:
             if posed:
                 encoded, left, top = _posed_sprite(
-                    key, width, height, str(path), modified, size, *pose, anchor)
+                    key, width, height, str(path), modified, size, *pose, anchor, layer, pivot)
             else:
-                encoded, left, top = render_sprite_png(key, width, height), 0, 0
+                encoded, left, top = render_sprite_png(key, width, height, layer=layer), 0, 0
             images[cache_key] = (tk.PhotoImage(master=canvas, data=encoded, format="png"), left, top)
         images.move_to_end(cache_key)
         while len(images) > _MAX_IMAGES:

@@ -1144,6 +1144,33 @@ def run_gui_smoke(report_path: Path, name: str = "Adventurer", seed: int | None 
         assert gear_game.get_state() == protected_state and gear_game.rng.getstate() == protected_rng
         checks.append("realistic_sanctuary")
 
+        fighter = Game(name="Sword tester", seed=7)
+        fighter.room.enemy = Enemy("Bone Sentry", 500, 500, 1, 3, (1, 6), 1, 50, 3)
+        fighter.rng = __import__("random").Random(5)
+        app.session.game = fighter
+        app.refresh_dungeon()
+        root.update()
+        shield_before = app.view_canvas.bbox("view-offhand")
+        sword_before = app.view_canvas.bbox("view-weapon")
+        assert shield_before and sword_before
+        app.action_buttons["attack"].invoke()
+        root.update()
+        wait_for_animation(lambda: bool(app._attack_frame and app._attack_frame["progress"] >= .5),
+                           "The sword did not reach its outward swing.")
+        shield_after = app.view_canvas.bbox("view-offhand")
+        sword_after = app.view_canvas.bbox("view-weapon")
+        assert shield_after and sword_after and sword_after != sword_before
+        assert app._attack_frame["offhand_dy"] > 0 and app._attack_frame["offhand_scale"] < 1
+        assert app._attack_frame["hands_dx"] < 0 and app._attack_frame["hands_dy"] < 0
+        assert shield_after[1] > shield_before[1], "The shield must retract down toward the adventurer."
+        assert sword_after[1] < sword_before[1], "The sword must reach forward into the room."
+        assert sword_after[3] >= app.view_canvas.winfo_height(), "The sword forearm must remain connected below the view."
+        assert app.view_canvas.find_withtag("fx-weapon")
+        wait_for_animation(lambda: app._attack_after_id is None, "The sword swing did not recover.")
+        assert app.view_canvas.bbox("view-offhand") == shield_before
+        assert app.view_canvas.bbox("view-weapon") == sword_before
+        checks.append("sword_forward_shield_back")
+
         # Drive a real Wizard attack through the same widgets, including a
         # dying foe retained briefly after the engine has cleared the room.
         wizard = Game(name="Spell tester", seed=7, class_id="wizard")

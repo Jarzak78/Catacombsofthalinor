@@ -90,10 +90,12 @@ def classify_reaction(event):
 def animation_frame(event, progress):
     """Return display-only transforms for one point in a 640 ms attack.
 
-    ``enemy_*`` and ``hands_*`` translations are in 1000x400 stage pixels;
-    angles are degrees and scales/opacity are unit factors.  Ordinary attacks
-    start/end neutral.  A defeated enemy finishes collapsed and transparent.
-    Raster envelopes have four key strengths to avoid resampling every tick.
+    ``enemy_*``, ``hands_*`` (weapon arm), and ``offhand_*`` translations are
+    in 1000x400 stage pixels; angles are degrees and scales/opacity are unit
+    factors.  The weapon and offhand use their own forearm pivots.  Ordinary
+    attacks start/end neutral.  A defeated enemy finishes collapsed and
+    transparent.  Raster envelopes have four key strengths to avoid resampling
+    every tick.
     """
     p = _clamp(_number(progress))
     reaction = classify_reaction(event)
@@ -107,6 +109,8 @@ def animation_frame(event, progress):
         "enemy_angle": 0.0, "enemy_opacity": 1.0,
         "hands_dx": 0.0, "hands_dy": 0.0,
         "hands_angle": 0.0, "hands_scale": 1.0,
+        "offhand_dx": 0.0, "offhand_dy": 0.0,
+        "offhand_angle": 0.0, "offhand_scale": 1.0,
         "pose": reaction, "reaction": reaction, "progress": p,
         "kind": kind, "source": source, "damage": damage,
         "critical": bool(event.get("critical") and event.get("hit")),
@@ -126,17 +130,25 @@ def animation_frame(event, progress):
     frame["pose_strength"] = strength
     sign = -1 if int(_number(event.get("roll"), 2)) % 2 else 1
     if source == "player" and kind == "weapon":
+        # The right forearm advances toward the foe while the shield pulls
+        # down/back.  A negative angle sweeps the left-pointing blade inward;
+        # rotating both arms together instead makes the shield lead the blow.
+        guard = _pulse(p, .12, .94)
+        guard_strength = _level(guard)
+        frame.update(offhand_dx=-18 * guard, offhand_dy=24 * guard,
+                     offhand_angle=-6 * guard_strength,
+                     offhand_scale=1 - .1 * guard_strength)
         if p < .22:
             frame.update(hands_dx=11 * _pulse(p, 0, .22), hands_dy=8 * _pulse(p, 0, .22),
-                         hands_angle=-12 if p >= .06 else 0)
+                         hands_angle=12 if p >= .06 else 0)
         elif p < .56:
             swing = _ease((p - .22) / .34)
-            frame.update(hands_dx=-32 * swing, hands_dy=-18 * swing,
-                         hands_angle=24 if p >= .36 else 12)
+            frame.update(hands_dx=-34 * swing, hands_dy=-70 * swing,
+                         hands_angle=-24 if p >= .36 else -12)
         else:
             recovery = 1 - _ease((p - .56) / .44)
-            frame.update(hands_dx=-32 * recovery, hands_dy=-18 * recovery,
-                         hands_angle=12 if p < .82 else 0)
+            frame.update(hands_dx=-34 * recovery, hands_dy=-70 * recovery,
+                         hands_angle=-12 if p < .82 else 0)
     elif source == "player" and kind in _SPELLS:
         thrust = _pulse(p, .08, .84)
         frame.update(hands_dx=-9 * thrust, hands_dy=-15 * thrust,
@@ -210,7 +222,7 @@ def draw_combat_effects(canvas, width, height, frame):
         start, end = max(0, travel - .42), min(1, travel + .03)
         for i in range(7):
             t = start + (end - start) * i / 6
-            positions.extend((785 - 360 * t, 148 + 92 * t - 52 * sin(pi * t)))
+            positions.extend((650 - 215 * t, 155 + 57 * t - 25 * sin(pi * t)))
         line(positions, "#a98e61", 7, "fx-weapon")
         line(positions, "#f2e2bb", 2, "fx-weapon")
     elif source == "player" and kind in ("firebolt", "frost", "missile") and .13 < p < .56:

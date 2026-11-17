@@ -162,7 +162,8 @@ class DungeonArtTests(unittest.TestCase):
                     "dungeon_view.draw_sprite", return_value=True) as sprite:
                 draw_dungeon_view(RecordingCanvas(), 1000, 400,
                                   room_view(enemy=enemy, **equipment))
-                foe, hands = sprite.call_args_list
+                foe = sprite.call_args_list[0]
+                hands = sprite.call_args_list[-1]
                 self.assertEqual(foe.args[2:6], (500, 307, 385, 270))
                 self.assertEqual(hands.args[2:6], (expected_x, 403, *expected_box))
                 self.assertEqual(hands.kwargs["anchor"], "s")
@@ -194,12 +195,33 @@ class DungeonArtTests(unittest.TestCase):
                 "sys.modules", {"combat_animation": SimpleNamespace(draw_combat_effects=lambda *args: None)}):
             draw_dungeon_view(RecordingCanvas(), 1000, 400, room_view(
                 enemy={"name": "Foe", "archetype": "humanoid"}), animation=animation)
-        foe, hands = sprite.call_args_list
+        foe, offhand, hands = sprite.call_args_list
         self.assertEqual(foe.args[2:6], (530, 312, 385, 270))
         self.assertEqual((foe.kwargs["angle"], foe.kwargs["stretch_x"],
                           foe.kwargs["stretch_y"], foe.kwargs["opacity"]), (12, 1.1, .8, .75))
         self.assertEqual(hands.args[2:6], (480, 388, 720, 248))
         self.assertEqual((hands.kwargs["angle"], hands.kwargs["stretch_x"]), (24, 1.1))
+        self.assertEqual(offhand.args[2:6], (500, 403, 720, 248))
+        self.assertEqual((offhand.kwargs["angle"], offhand.kwargs["stretch_x"]), (0, 1))
+        self.assertEqual(offhand.kwargs["layer"], "offhand")
+        self.assertEqual(hands.kwargs["layer"], "weapon")
+        self.assertEqual(hands.kwargs["pivot"], (.88, 1))
+
+    def test_shield_retracts_independently_as_the_sword_swings_forward(self):
+        animation = {"hands_dx": -34, "hands_dy": -70, "hands_angle": -24,
+                     "offhand_dx": -18, "offhand_dy": 24, "offhand_angle": -6, "offhand_scale": .9}
+        with patch("dungeon_view.draw_sprite", return_value=True) as sprite, patch.dict(
+                "sys.modules", {"combat_animation": SimpleNamespace(draw_combat_effects=lambda *args: None)}):
+            draw_dungeon_view(RecordingCanvas(), 1000, 400, room_view(), animation=animation)
+        offhand, weapon = sprite.call_args_list
+        self.assertEqual(offhand.args[2:4], (482, 427))
+        self.assertEqual(weapon.args[2:4], (466, 333))
+        self.assertEqual((offhand.kwargs["angle"], offhand.kwargs["stretch_x"]), (-6, .9))
+        self.assertEqual((weapon.kwargs["angle"], weapon.kwargs["stretch_x"]), (-24, 1))
+        self.assertIn("view-shield", offhand.kwargs["tags"])
+        self.assertIn("view-offhand", offhand.kwargs["tags"])
+        self.assertNotIn("view-shield", weapon.kwargs["tags"])
+        self.assertIn("view-weapon", weapon.kwargs["tags"])
 
     def test_effects_are_replaced_and_cleared_on_idle_and_scene_changes(self):
         canvas = RecordingCanvas()

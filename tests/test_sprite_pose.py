@@ -6,6 +6,7 @@ import unittest
 from unittest.mock import patch
 
 import sprite_art
+from dungeon_view import draw_dungeon_view
 
 
 class ImageCanvas:
@@ -53,6 +54,90 @@ class SpritePoseTests(unittest.TestCase):
             20, 30, bytes((120, 130, 140, 255)) * 600, 0, 1, 1.2, .6, "s")
         self.assertEqual((width, height, left, top), (24, 18, -12, -18))
         self.assertEqual(top + height, 0)
+
+    def test_real_single_hand_layers_split_only_at_a_verified_transparent_gap(self):
+        for key in ("sword_shield", "rogue_rapier"):
+            with self.subTest(key=key):
+                path, modified, size = sprite_art._asset_path(key)
+                width, height, original = sprite_art._sprite_pixels(key, str(path), modified, size)
+                self.assertFalse(any(original[(y * width + width // 2) * 4 + 3] for y in range(height)))
+                layers = [sprite_art._hand_layer_pixels(key, str(path), modified, size, layer)
+                          for layer in ("offhand", "weapon")]
+                self.assertTrue(all(layer[:2] == (width, height) for layer in layers))
+                left, right = layers[0][2], layers[1][2]
+                self.assertEqual(sum(left[3::4]) + sum(right[3::4]), sum(original[3::4]))
+                self.assertFalse(any(a and b for a, b in zip(left[3::4], right[3::4])))
+                self.assertTrue(any(left[3::4]))
+                self.assertTrue(any(right[3::4]))
+                scaled = [sprite_art._decode_png(sprite_art.render_sprite_png(
+                    key, 720, 248, layer=layer))[2] for layer in (None, "offhand", "weapon")]
+                for i in range(0, len(scaled[0]), 4):
+                    original_pixel = scaled[0][i:i + 4]
+                    actual = scaled[1][i:i + 4] if scaled[1][i + 3] else scaled[2][i:i + 4]
+                    if original_pixel[3]:
+                        self.assertEqual(actual, original_pixel)
+
+    def test_explicit_forearm_pivot_stays_in_place_during_rotation(self):
+        pixels = bytearray(10 * 10 * 4)
+        pixels[(9 * 10 + 8) * 4:(9 * 10 + 9) * 4] = bytes((80, 170, 230, 255))
+        width, _, actual, left, top = sprite_art._affine_rgba(
+            10, 10, pixels, 90, 1, 1, 1, "center", pivot=(.85, .95))
+        points = [(left + (i // 4) % width + .5, top + (i // 4) // width + .5)
+                  for i in range(0, len(actual), 4) if actual[i + 3]]
+        self.assertEqual(points, [(3.5, 4.5)])
+
+    def test_raised_weapon_sleeve_continues_past_the_viewport_bottom(self):
+        path, modified, size = sprite_art._asset_path("sword_shield")
+        width, height, original = sprite_art._scaled_sprite(
+            "sword_shield", 720, 248, str(path), modified, size, "weapon")
+        extended_height, extended = sprite_art._continue_forearm(width, height, original)
+        self.assertEqual(extended[:len(original)], original)
+        bottom_alpha = original[(height - 1) * width * 4 + 3:height * width * 4:4]
+        for row in range(height, extended_height):
+            self.assertEqual(extended[row * width * 4 + 3:(row + 1) * width * 4:4], bottom_alpha)
+        png, left, top = sprite_art._posed_sprite(
+            "sword_shield", 720, 248, str(path), modified, size,
+            -24, 1, 1, 1, "s", "weapon", (.88, 1))
+        output_width, _, pixels = sprite_art._decode_png(png)
+        lowest = max((i // 4) // output_width for i in range(0, len(pixels), 4) if pixels[i + 3])
+        self.assertGreater(333 + top + lowest, 420)
+        png, left, top = sprite_art._posed_sprite(
+            "sword_shield", 720, 248, str(path), modified, size,
+            0, 1, 1, 1, "s", "weapon", (.88, 1))
+        output_width, _, pixels = sprite_art._decode_png(png)
+        self.assertEqual(pixels[:len(original)], original)
+        self.assertEqual((left, top), (-width / 2, -height))
+        lowest = max((i // 4) // output_width for i in range(0, len(pixels), 4) if pixels[i + 3])
+        self.assertGreater(389 + top + lowest, 420)
+
+    def test_real_tk_shield_and_weapon_use_independent_images_and_motion(self):
+        import tkinter as tk
+        try:
+            window = tk.Tk()
+        except tk.TclError as error:
+            self.skipTest(f"A Tk display is required for the independent arm check: {error}")
+        self.addCleanup(window.destroy)
+        window.withdraw()
+        canvas = tk.Canvas(window, width=1000, height=400)
+        view = {"scene": "dungeon", "class_id": "fighter", "floor": 1}
+        draw_dungeon_view(canvas, 1000, 400, view)
+        shield = canvas.find_withtag("view-offhand")[0]
+        weapon = canvas.find_withtag("view-weapon")[0]
+        initial_shield = (canvas.coords(shield), canvas.itemcget(shield, "image"))
+        initial_weapon = (canvas.coords(weapon), canvas.itemcget(weapon, "image"))
+        draw_dungeon_view(canvas, 1000, 400, view, animation={
+            "hands_dx": -34, "hands_dy": -70, "hands_angle": -24})
+        shield = canvas.find_withtag("view-offhand")[0]
+        weapon = canvas.find_withtag("view-weapon")[0]
+        self.assertEqual((canvas.coords(shield), canvas.itemcget(shield, "image")), initial_shield)
+        self.assertNotEqual((canvas.coords(weapon), canvas.itemcget(weapon, "image")), initial_weapon)
+        draw_dungeon_view(canvas, 1000, 400, view, animation={
+            "hands_dx": -34, "hands_dy": -70, "hands_angle": -24,
+            "offhand_dx": -18, "offhand_dy": 24, "offhand_angle": -6, "offhand_scale": .9})
+        shield = canvas.find_withtag("view-offhand")[0]
+        self.assertNotEqual((canvas.coords(shield), canvas.itemcget(shield, "image")), initial_shield)
+        self.assertEqual(canvas.find_withtag("view-shield"), (shield,))
+        self.assertEqual(len(canvas.find_withtag("sprite-sword_shield")), 2)
 
     def test_quantized_pose_reuses_native_images_and_both_caches_are_bounded(self):
         pose_cache = sprite_art._posed_sprite
