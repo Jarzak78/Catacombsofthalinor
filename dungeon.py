@@ -1,11 +1,13 @@
 """Generate and reveal a connected, seedable dungeon."""
 
-from collections import deque
+from campaign import FLOORS
+from floor_lore import LORE
+from lore_notes import NOTES
 import random
 
-from loot_library import TREASURE_BUNDLES
+from loot_library import roll_room_loot
 from room import Room
-from room_library import ENTRANCE, ROOM_FLAVORS, SANCTUM, make_enemy, make_warden
+from room_library import make_floor_enemies, make_warden
 
 
 DIRECTION_OFFSETS = {
@@ -28,22 +30,47 @@ class Dungeon:
     start = (0, 0)
     boss_position = (3, 2)
 
-    def __init__(self, rng: random.Random) -> None:
+    def __init__(self, rng: random.Random, floor: int = 1, class_id: str = "fighter") -> None:
+        if not 1 <= floor <= len(FLOORS):
+            raise ValueError("Invalid dungeon floor.")
+        if class_id not in ("fighter", "rogue", "wizard"):
+            raise ValueError("Invalid adventurer class.")
+        self.floor = floor
+        self.class_id = class_id
+        self.theme = FLOORS[floor - 1]
+        self.lore = LORE[floor - 1]
         self.rooms: dict[tuple[int, int], Room] = {}
         self._create_rooms(rng)
         self._connect_rooms(rng)
         self._place_contents(rng)
+        # Place authored documents in their matching rooms without extra RNG.
+        by_name = {room.name: room for room in self.rooms.values()}
+        for note in NOTES[floor]:
+            by_name[note.room_name].note = note
+        depth = floor - 1
+        for room in self.rooms.values():
+            if room.enemy:
+                enemy = room.enemy
+                enemy.max_hp += depth * (10 if enemy.boss else 5)
+                enemy.hp = enemy.max_hp
+                enemy.armor_class += depth
+                enemy.attack_bonus += depth
+                enemy.damage_bonus += depth
+                enemy.xp_reward *= floor
+                enemy.gold_reward *= floor
+                if enemy.boss:
+                    enemy.name = self.theme.guardian
 
     def _create_rooms(self, rng: random.Random) -> None:
-        flavors = list(ROOM_FLAVORS)
+        flavors = list(self.lore.rooms)
         rng.shuffle(flavors)
         for y in range(self.height):
             for x in range(self.width):
                 position = (x, y)
                 if position == self.start:
-                    name, description = ENTRANCE
+                    name, description = self.lore.entrance
                 elif position == self.boss_position:
-                    name, description = SANCTUM
+                    name, description = self.lore.sanctum
                 else:
                     name, description = flavors.pop()
                 self.rooms[position] = Room(position, name, description, {})
@@ -103,26 +130,18 @@ class Dungeon:
         ]
         rng.shuffle(positions)
 
-        # Place the runeblade in a nearest room, giving every run an early upgrade.
-        distances = {self.start: 0}
-        frontier = deque([self.start])
-        while frontier:
-            position = frontier.popleft()
-            for destination in self.rooms[position].exits.values():
-                if destination not in distances:
-                    distances[destination] = distances[position] + 1
-                    frontier.append(destination)
-        weapon_position = min(positions, key=distances.__getitem__)
-        positions.remove(weapon_position)
-        self.rooms[weapon_position].loot = TREASURE_BUNDLES[-1]
-
-        treasures = list(TREASURE_BUNDLES[:-1])
-        rng.shuffle(treasures)
-        for position, treasure in zip(positions[:3], treasures):
-            self.rooms[position].loot = treasure
-        for position in positions[3:]:
-            self.rooms[position].enemy = make_enemy(rng)
+        # Four ordinary rooms remain safe; all six native foes appear once.
+        # Safe rooms have better loot chances, but can still contain no treasure.
+        for position, enemy in zip(positions[4:], make_floor_enemies(rng, self.floor)):
+            self.rooms[position].enemy = enemy
         self.rooms[self.boss_position].enemy = make_warden()
+        for position, room in self.rooms.items():
+            if position == self.start:
+                continue
+            source = ("guardian" if room.enemy and room.enemy.boss else
+                      "monster" if room.enemy else "cache")
+            loot = roll_room_loot(rng, self.floor, self.class_id, source)
+            room.loot = loot if loot.has_treasure else None
 
     def get_room(self, position: tuple[int, int]) -> Room:
         return self.rooms[position]
@@ -143,8 +162,10 @@ class Dungeon:
                     marker = "?"
                 elif room.enemy and room.enemy.is_alive:
                     marker = "B" if room.enemy.boss else "E"
-                elif room.loot and not room.looted:
+                elif room.loot and room.loot.has_treasure and not room.looted:
                     marker = "$"
+                elif room.note and not room.note_collected:
+                    marker = "N"
                 else:
                     marker = "."
                 room_line.append(marker)

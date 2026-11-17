@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 
 from loot_library import Loot
+from lore_notes import LoreNote
 
 
 @dataclass
@@ -42,3 +43,5 @@ class Room:
     loot: Loot | None = None
     visited: bool = False
     looted: bool = False
+    note: LoreNote | None = None
+    note_collected: bool = False

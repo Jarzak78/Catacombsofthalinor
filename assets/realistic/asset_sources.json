@@ -1,0 +1,117 @@
+{
+  "version": 1,
+  "created": "2026-11-16",
+  "project": "Catacombs of Thalinor",
+  "generator": {
+    "service": "OpenAI image generation",
+    "tool": "image_gen",
+    "model": "Tool-selected; exact model/version not reported"
+  },
+  "source": "New artwork generated for this project from the recorded original prompts; no third-party image packs, franchise characters, logos, named artists, or likeness references were requested.",
+  "rights_note": "AI-assisted project artwork. Applicable service terms govern use; no guarantee of uniqueness, exclusive copyright, or comprehensive legal clearance is claimed. These assets do not relicense SRD material or the separate project code.",
+  "processing": "Image generation followed by image-tool refinement of alpha cutouts and atlas spacing. Runtime sprite extraction and premultiplied-alpha bilinear scaling use the Python standard library; no runtime image-library dependency.",
+  "atlases": [
+    {
+      "file": "hands.png",
+      "grid": {
+        "columns": 1,
+        "rows": 3
+      },
+      "prompt": "Original production game-art sprite atlas for an independent dark fantasy dungeon game. Realistically rendered materials and anatomy, cinematic physically plausible torchlight from upper left with a faint cool rim on the right. High detail readable at small game size: worn leather pores, natural skin creases, forged steel edges, restrained colors. All subjects are original generic fantasy designs, no existing franchise characters, no logos, no text, no captions, no borders, no checkerboard pattern. Truly transparent alpha background, no scenery or ground plane, separated cells with no overlap. Precise evenly spaced atlas layout. PORTRAIT CANVAS 1024 wide by 1536 high, exactly ONE column and THREE equal horizontal rows, each row a 1024x512 landscape first-person weapon overlay. Only the adventurer's hands, wrists and held equipment visible, no face, torso or full person. Hands enter from the bottom edge of EACH individual row and equipment rises toward center, intended to overlay a dungeon view. Keep all weapons inside their row, with generous transparent space toward top. TOP ROW: adult warrior's left hand behind a round battered iron-rimmed wooden shield at lower left, right anatomically natural gloved hand firmly gripping a realistic one-handed longsword at lower right, blade rises diagonally toward upper right; lifelike proper grip and five fingers. MIDDLE ROW: rogue's left open leather-gloved balancing hand low left, right leather-gloved hand gripping a slender forged steel rapier low right, blade pointing upward and inward, correct blade and hand proportions. BOTTOM ROW: wizard's left natural hand extended low left holding a small restrained blue-white arcane glow between fingertips, right hand low right gripping a detailed weathered wooden staff capped with a small quartz crystal, staff head rises to upper right. The three POV compositions must occupy separate exactly equal rows, all warm-lit, highly realistic, not cartoon or low-poly.",
+      "source_type": "project-generated original",
+      "revision": "Transparent cutouts and spacing refined with the image-generation tool.",
+      "sha256": "e8c2f87b12d47ec5e622a9f130dfd94e9f6a3113d150dac81ba8bdbbf00f80b9",
+      "git_sha": "9cf4468308492b0525d64bf66afc5b7c6f20c47d",
+      "width": 1024,
+      "height": 1536,
+      "bytes": 2007105,
+      "sprite_regions": {
+        "sword_shield": [
+          0,
+          0,
+          1,
+          0.3333333333333333
+        ],
+        "rogue_rapier": [
+          0,
+          0.3333333333333333,
+          1,
+          0.6666666666666666
+        ],
+        "wizard_staff": [
+          0,
+          0.6673177083333334,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "file": "weapons.png",
+      "grid": {
+        "columns": 1,
+        "rows": 3
+      },
+      "prompt": "Original production game-art sprite atlas for an independent dark fantasy dungeon game. Realistically rendered materials and anatomy, cinematic physically plausible torchlight from upper left with a faint cool rim on the right. High detail readable at small game size: worn leather pores, natural skin creases, forged steel edges, restrained colors. All subjects are original generic fantasy designs, no existing franchise characters, no logos, no text, no captions, no borders, no checkerboard pattern. Truly transparent alpha background, no scenery or ground plane, separated cells with no overlap. Precise evenly spaced atlas layout. PORTRAIT CANVAS 1024 wide by 1536 high, exactly ONE column and THREE equal horizontal rows, each row a 1024x512 landscape first-person weapon overlay. Only an adult adventurer's hands, wrists and equipment, no head, face or torso. Hands enter from bottom of EACH row. All weapons remain entirely inside their own row, generous transparent top margin. TOP ROW: two realistic leather-gauntleted hands correctly gripping a long two-handed greatsword with broad worn forged steel blade and crossguard, both hands stacked on the long hilt at lower center-right, blade rises upward toward center; no shield. MIDDLE ROW: rogue right hand in worn fingerless leather glove at lower right gripping a believable steel dagger in forward grip, left open balancing gloved hand at lower left; one dagger only, natural five-finger anatomy and restrained dramatic torchlight. BOTTOM ROW: two leather-gauntleted adult hands gripping a long timber handle of a realistic heavy two-handed greataxe, axe head forged iron with a broad crescent cutting edge above center-right, no shield. Proper grip, proportions, detailed joints, steel and leather, realistic rendered game-art, not cartoon or flat shapes.",
+      "source_type": "project-generated original",
+      "revision": "Axe head orientation corrected: broad bit on the left of the shaft, short poll on the right; original hands and other two grips retained.",
+      "sha256": "169066c10ad04af76ff1ec8cb298079aadb4291f1308321d0de505ad3acb4440",
+      "git_sha": "acc6ec12872db93b97720b4786f8c317c376347b",
+      "width": 1024,
+      "height": 1536,
+      "bytes": 1882121,
+      "correction_prompt": "Edit the idle game-prop orientation in the BOTTOM panel of this sprite atlas. The axe head is mounted the wrong way around on its wooden shaft. Rotate only the metal head 180 degrees around the shaft: the large broad crescent bit must extend to the LEFT of the shaft and the short poll must extend to the RIGHT. Keep the wood handle, both gloved hands, sleeves, camera view, and realistic materials in their current positions. Keep the top sword panel and middle dagger panel unchanged. This is a static isolated equipment illustration. Preserve transparent alpha outside the subjects and the same three-panel portrait layout.",
+      "sprite_regions": {
+        "greatsword": [
+          0,
+          0,
+          1,
+          0.3678385416666667
+        ],
+        "rogue_dagger": [
+          0,
+          0.3678385416666667,
+          1,
+          0.6666666666666666
+        ],
+        "greataxe": [
+          0,
+          0.6666666666666666,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "file": "enemies.png",
+      "grid": {
+        "columns": 3,
+        "rows": 3
+      },
+      "prompt": "Original production game-art sprite atlas for an independent dark fantasy dungeon game. Realistically rendered materials and anatomy, cinematic physically plausible torchlight from upper left with a faint cool rim on the right. High detail readable at small game size: worn leather pores, natural skin creases, forged steel edges, restrained colors. All subjects are original generic fantasy designs, no existing franchise characters, no logos, no text, no captions, no borders, no checkerboard pattern. Truly transparent alpha background, no scenery or ground plane, separated cells with no overlap. Precise evenly spaced atlas layout. SQUARE CANVAS 1536x1536, exactly THREE columns and THREE rows of EQUAL square cells (3x3), one complete isolated creature in each cell. Full bodies viewed from adventurer eye-level in a slightly aggressive three-quarter front pose. Each creature fits its own cell with at least 12% transparent padding all sides. No shadow disks or floor. TOP LEFT: ancient human skeleton crypt sentry with weathered bone, leather scraps, rusty shortsword. TOP CENTER: large mangy crypt rat with realistic coarse gray fur, small ears and long curling tail, hunched side-front stance. TOP RIGHT: weathered human-sized iron-armored dungeon marauder with full battered helmet, chainmail, one-handed rusty sword, opaque eye slit, realistic anatomy. MIDDLE LEFT: giant black-brown crypt beetle with iridescent chitin, six articulated legs and mandibles, realistic insect anatomy. MIDDLE CENTER: thick green-brown rootbound viper coiled with head raised, realistic overlapping scales and faint amber eyes. MIDDLE RIGHT: original spectral wisp, a ragged floating humanoid shroud of pale blue-gray mist with a shadowed face and two dim eyes, wispy translucent lower edge. BOTTOM LEFT: original fungal keeper humanoid with barklike sinews, moss, small mushrooms and weathered cloth, believable anatomy, no recognizable franchise design. BOTTOM CENTER: original furnace automaton, stocky humanoid of riveted soot-black iron plates and realistic mechanical joints with restrained ember light in chest, no modern robotics branding. BOTTOM RIGHT: low crawling necrotic ooze, wet smoky purple-black translucent organic mound with folds, tiny embedded bone fragments and subtle dim amber inner glow, no cartoon face. Strong tactile material rendering and natural shadows inside forms, uniformly realistic quality.",
+      "source_type": "project-generated original",
+      "revision": "Transparent cutouts and spacing refined with the image-generation tool.",
+      "sha256": "d6a4368888a7104a37da4a3f06c1fece079adcbfc90cdad2c8726d2ee8dcc5a6",
+      "git_sha": "04708361efc761a437752a94cd65eef8c54672c3",
+      "width": 1254,
+      "height": 1254,
+      "bytes": 1407308
+    },
+    {
+      "file": "guardians.png",
+      "grid": {
+        "columns": 3,
+        "rows": 2
+      },
+      "prompt": "Original production game-art sprite atlas for an independent dark fantasy dungeon game. Realistically rendered materials and anatomy, cinematic physically plausible torchlight from upper left with a faint cool rim on the right. High detail readable at small game size: worn leather pores, natural skin creases, forged steel edges, restrained colors. All subjects are original generic fantasy designs, no existing franchise characters, no logos, no text, no captions, no borders, no checkerboard pattern. Truly transparent alpha background, no scenery or ground plane, separated cells with no overlap. Precise evenly spaced atlas layout. LANDSCAPE CANVAS 1536 wide by 1024 high. Exactly THREE columns and TWO rows of EQUAL square cells. One complete isolated subject per cell, at least 10% transparent margin. Full body upright near-front perspective at eye level, detailed natural proportions and dramatic restrained torchlight. TOP LEFT: Warden of the forgotten catacombs, an original imposing undead royal prison guard in corroded layered iron armor, battered crested helmet, two-handed old sword, weathered bone visible only at jaw. TOP CENTER: rootbound sentinel, an original towering humanoid formed of thick tangled roots and old wood, natural branching limbs, moss and small amber lights in knotted face, massive but believable proportions. TOP RIGHT: ashen forge colossus, an original massive stone-and-iron humanoid construct, cracked charcoal plates with subtle molten orange seams, one heavy stone fist, ancient furnace machinery aesthetic. BOTTOM LEFT: void knight, an original tall armored sentinel in blackened steel with cold violet edge reflections, closed angular helmet and long sword, no modern franchise resemblance. BOTTOM CENTER: hollow king, an original gaunt undead monarch in tarnished gold crown and deeply weathered burgundy royal robes over antique armor, spectral red light faintly inside hollow chest, holding a worn regal blade, no gore. BOTTOM RIGHT: Mira the sanctuary merchant, an original friendly mature adult woman with natural realistic face, gray-streaked chestnut hair, moss green medieval traveling coat and leather apron, holding a small potion bottle, standing hands visible, grounded and welcoming. All six isolated on true transparent alpha, not cartoon, no backgrounds, no cell labels.",
+      "source_type": "project-generated original",
+      "revision": "Transparent cutouts and spacing refined with the image-generation tool.",
+      "sha256": "bf5b5a2215f6c53e7914a39f192c5bc8325a30b1442c5a28bc329017889c497a",
+      "git_sha": "6fa64efb504612473a855eba835d836f862970a6",
+      "width": 1536,
+      "height": 1024,
+      "bytes": 2622963
+    }
+  ],
+  "packaging": "The GUI embeds the PNGs and this record byte-for-byte; the release legal/artwork-sources.json mirrors this source record. Source rectangles isolate uneven generated atlas rows without modifying the PNG artwork."
+}

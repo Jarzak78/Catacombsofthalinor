@@ -49,9 +49,9 @@ def route_to(game, destination):
     raise AssertionError(f"No route to {destination}")
 
 
-def complete_adventure(seed):
+def complete_adventure(seed, floors=1):
     """Explore every room using actual combat rolls, healing, and actions."""
-    game = Game(name="Tarin", seed=seed)
+    game = Game(name="Tarin", seed=seed, floors=floors)
     transcript = []
     commands = []
 
@@ -63,9 +63,8 @@ def complete_adventure(seed):
         for _ in range(200):
             if game.over or game.enemy is None:
                 break
-            if not game.player.is_conscious:
-                act("end")
-                continue
+            if game.free_examine_available:
+                act("examine")
             if game.player.hp <= game.player.max_hp - 5 and game.bonus_action_available:
                 if game.player.second_wind_uses:
                     act("wind")
@@ -89,23 +88,33 @@ def complete_adventure(seed):
                 if game.player.hp < game.player.max_hp:
                     act("wind")
 
-    targets = [position for position in game.dungeon.rooms
-               if position != game.dungeon.boss_position]
-    # Collect the guaranteed adjacent weapon before visiting hostile rooms.
-    weapon_room = next(position for position, room in game.dungeon.rooms.items()
-                       if room.loot and room.loot.weapon_name)
-    targets.remove(weapon_room)
-    targets.insert(0, weapon_room)
-    targets.append(game.dungeon.boss_position)
-    for target in targets:
-        for direction in route_to(game, target):
-            act(direction)
+    while not game.over:
+        targets = [position for position in game.dungeon.rooms
+                   if position != game.dungeon.boss_position]
+        # First floor has the guaranteed weapon; later floors have supplies.
+        weapon_room = next((position for position, room in game.dungeon.rooms.items()
+                            if position in targets and room.loot and room.loot.weapon_name
+                            and room.enemy is None), None)
+        if weapon_room is not None:
+            targets.remove(weapon_room)
+            targets.insert(0, weapon_room)
+        targets.append(game.dungeon.boss_position)
+        for target in targets:
+            for direction in route_to(game, target):
+                act(direction)
+                clear_room()
+                if game.over:
+                    return game, commands, transcript
             clear_room()
             if game.over:
                 return game, commands, transcript
-        clear_room()
-        if game.over:
-            break
+        if not game.floor_cleared:
+            raise AssertionError("Floor exploration did not defeat its guardian")
+        act("portal")
+        if game.floor < game.total_floors:
+            for item in ("sword", "armor", "charm", "ward"):
+                act("buy " + item)
+        act("descend")
     return game, commands, transcript
 
 
@@ -128,7 +137,8 @@ class TurnTests(unittest.TestCase):
         game = Game(seed=7)
         direction, position = next(iter(game.room.exits.items()))
         game.dungeon.get_room(position).enemy = Enemy("Sentry", 10, 10, 12, 3, (1, 6), 1, 50, 0)
-        game.rng = ScriptedRandom([2, 20, 15, 3])
+        # Failed entry scouting, then enemy initiative and an advantaged strike.
+        game.rng = ScriptedRandom([1, 2, 20, 2, 15, 3])
         output = game.handle_command(direction)
         self.assertEqual(game.player.hp, 8)
         self.assertEqual(game.actions_remaining, 1)
@@ -233,43 +243,49 @@ class TurnTests(unittest.TestCase):
         self.assertEqual(game.player.hp, 12)
         self.assertEqual(game.player.xp, 50)
 
-    def test_unconscious_player_cannot_drink_their_own_potion(self):
+    def test_dead_player_cannot_drink_their_own_potion(self):
         game = combat_game()
-        game.player.hp = 0
+        game.player.take_damage(game.player.hp)
         game.handle_command("potion")
         self.assertEqual(game.player.hp, 0)
         self.assertEqual(game.player.potions, 3)
+        self.assertTrue(game.over)
 
-    def test_natural_twenty_death_save_restores_action_on_that_turn(self):
-        game = combat_game([1, 1, 20])
-        game.player.hp = 0
-        game.handle_command("end")  # Enemy misses with Advantage; death save rolls 20.
-        self.assertEqual(game.player.hp, 1)
-        self.assertEqual(game.actions_remaining, 1)
-        self.assertTrue(game.bonus_action_available)
-        self.assertFalse(game.over)
-
-    def test_melee_hit_on_unconscious_character_critically_fails_death_saves(self):
-        game = combat_game([18, 19, 1, 1])
-        game.player.hp = 0
-        game.player.death_save_failures = 1
+    def test_ending_turn_after_death_cannot_restore_hit_points_or_actions(self):
+        game = combat_game()
+        game.player.take_damage(game.player.hp)
+        game.actions_remaining = 0
+        game.bonus_action_available = False
+        before = game.get_state()
         output = game.handle_command("end")
+        self.assertEqual(game.get_state(), before)
+        self.assertEqual(game.player.hp, 0)
+        self.assertIn("over", "\n".join(output).lower())
+
+    def test_lethal_critical_hit_ends_adventure_on_that_attack(self):
+        game = combat_game([20, 1, 1])
+        game.player.hp = 3
+        output = game.handle_command("end")
+        self.assertEqual(game.player.hp, 0)
         self.assertTrue(game.player.dead)
         self.assertTrue(game.over)
         self.assertIn("Critical hit", "\n".join(output))
+        self.assertIn("You die", "\n".join(output))
+        self.assertEqual(game.round_number, 1)
 
 
 class ExplorationTests(unittest.TestCase):
     def test_treasure_can_only_be_collected_once(self):
         game = Game(seed=7)
-        target = next(position for position, room in game.dungeon.rooms.items()
-                      if room.loot and room.loot.weapon_name)
-        for direction in route_to(game, target):
-            game.handle_command(direction)
+        from equipment import make_equipment
+        from loot_library import Loot
+        game.room.loot = Loot(gold=12, potions=1, equipment=(make_equipment("longsword", 1),))
         game.handle_command("loot")
-        gold = game.player.gold
+        state = game.get_state()
+        rng = game.rng.getstate()
         game.handle_command("loot")
-        self.assertEqual(game.player.gold, gold)
+        self.assertEqual(game.get_state(), state)
+        self.assertEqual(game.rng.getstate(), rng)
         self.assertEqual(game.player.weapon_bonus, 1)
         self.assertEqual(game.player.attack_bonus, 6)
 
@@ -354,18 +370,18 @@ class ExplorationTests(unittest.TestCase):
         game, commands, _ = complete_adventure(7)
         self.assertTrue(game.won)
         result = subprocess.run(
-            [sys.executable, "-B", "Main.py", "--name", "Tarin", "--seed", "7"],
+            [sys.executable, "-B", "Main.py", "--quick-start", "--name", "Tarin", "--seed", "7", "--floors", "1"],
             cwd=ROOT, input="\n".join(commands) + "\n", text=True,
             capture_output=True, timeout=10,
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("Your first dungeon is conquered", result.stdout)
-        self.assertIn("Fighter 2", result.stdout)
+        self.assertIn("Warrior (Fighter) 2", result.stdout)
 
     def test_cli_handles_quit_and_closed_input(self):
         for commands in ("help\nstats\nquit\n", ""):
             with self.subTest(commands=commands):
-                result = subprocess.run([sys.executable, "-B", "Main.py", "--seed", "7"],
+                result = subprocess.run([sys.executable, "-B", "Main.py", "--quick-start", "--seed", "7", "--floors", "1"],
                                         cwd=ROOT, input=commands, text=True,
                                         capture_output=True, timeout=10)
                 self.assertEqual(result.returncode, 0, result.stderr)

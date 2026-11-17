@@ -47,52 +47,6 @@ class PlayerTests(unittest.TestCase):
             with self.subTest(score=score):
                 self.assertEqual(ability_modifier(score), expected)
 
-    def test_damage_cannot_reduce_health_below_zero(self):
-        player = Player()
-        self.assertEqual(player.take_damage(13), 12)
-        self.assertEqual(player.hp, 0)
-        self.assertTrue(player.is_alive)
-        self.assertFalse(player.is_conscious)
-        self.assertEqual(player.death_save_failures, 0)
-
-    def test_massive_damage_kills_when_excess_reaches_maximum_health(self):
-        for damage, dead in [(14, False), (15, True)]:
-            with self.subTest(damage=damage):
-                player = Player(hp=3)
-                self.assertEqual(player.take_damage(damage), 3)
-                self.assertEqual(player.hp, 0)
-                self.assertEqual(player.dead, dead)
-                self.assertEqual(player.is_alive, not dead)
-
-    def test_damage_at_zero_health_counts_failed_saves_and_critical_counts_two(self):
-        player = Player(hp=0)
-        self.assertEqual(player.take_damage(1, critical=True), 0)
-        self.assertEqual(player.death_save_failures, 2)
-        self.assertTrue(player.is_alive)
-        self.assertEqual(player.take_damage(1), 0)
-        self.assertEqual(player.death_save_failures, 3)
-        self.assertTrue(player.dead)
-
-    def test_critical_that_knocks_out_conscious_player_adds_no_failed_saves(self):
-        player = Player(hp=5)
-        player.take_damage(5, critical=True)
-        self.assertEqual(player.hp, 0)
-        self.assertEqual(player.death_save_failures, 0)
-
-    def test_massive_damage_at_zero_health_kills_instantly(self):
-        player = Player(hp=0)
-        player.take_damage(player.max_hp)
-        self.assertTrue(player.dead)
-
-    def test_damage_breaks_stability_but_zero_damage_does_not(self):
-        player = Player(hp=0, stable=True)
-        player.take_damage(0)
-        self.assertTrue(player.stable)
-        self.assertEqual(player.death_save_failures, 0)
-        player.take_damage(1)
-        self.assertFalse(player.stable)
-        self.assertEqual(player.death_save_failures, 1)
-
     def test_negative_damage_is_rejected_without_changing_health(self):
         player = Player()
         with self.assertRaises(ValueError):
@@ -105,13 +59,6 @@ class PlayerTests(unittest.TestCase):
         self.assertEqual(player.heal(100), 4)
         self.assertEqual(player.hp, player.max_hp)
         self.assertEqual(player.heal(1), 0)
-
-    def test_healing_restores_consciousness_and_clears_death_saves(self):
-        player = Player(hp=0, death_save_successes=1, death_save_failures=2)
-        self.assertEqual(player.heal(4), 4)
-        self.assertTrue(player.is_conscious)
-        self.assertEqual((player.death_save_successes, player.death_save_failures), (0, 0))
-        self.assertFalse(player.stable)
 
     def test_healing_cannot_revive_a_dead_adventurer(self):
         player = Player()
@@ -154,12 +101,6 @@ class PlayerTests(unittest.TestCase):
                 self.assertEqual(player.hp, 1 + expected)
                 self.assertEqual(rng.calls, [(1, 4), (1, 4)])
 
-    def test_administered_potion_can_restore_an_unconscious_adventurer(self):
-        player = Player(hp=0, death_save_failures=2)
-        self.assertEqual(player.use_potion(FixedRolls(1, 1)), 4)
-        self.assertTrue(player.is_conscious)
-        self.assertEqual(player.death_save_failures, 0)
-
     def test_level_thresholds_use_cumulative_experience(self):
         player = Player(hp=4)
         self.assertEqual(player.gain_xp(299), 0)
@@ -182,7 +123,7 @@ class PlayerTests(unittest.TestCase):
         self.assertFalse(player.action_surge_available)
         self.assertEqual(player.xp_to_next_level, 2700)
 
-    def test_leveling_does_not_revive_an_unconscious_character(self):
+    def test_leveling_does_not_revive_a_dead_character(self):
         player = Player(hp=0)
         player.gain_xp(300)
         self.assertEqual(player.level, 2)
@@ -256,7 +197,7 @@ class PlayerTests(unittest.TestCase):
         self.assertEqual(rng.calls, [(1, 10)])
         self.assertEqual(player.spend_hit_die(FixedRolls()), 0)
 
-    def test_hit_die_cannot_be_spent_at_full_health_or_while_unconscious(self):
+    def test_hit_die_cannot_be_spent_at_full_health_or_while_dead(self):
         for health in (0, 12):
             with self.subTest(health=health):
                 player = Player(hp=health)
@@ -283,14 +224,12 @@ class PlayerTests(unittest.TestCase):
         self.assertTrue(player.action_surge_available)
 
     def test_long_rest_requires_at_least_one_hit_point(self):
-        for stable in (False, True):
-            with self.subTest(stable=stable):
-                player = Player(hp=0, stable=stable, second_wind_uses=0, hit_dice_remaining=0)
-                player.long_rest()
-                self.assertEqual(player.hp, 0)
-                self.assertEqual(player.stable, stable)
-                self.assertEqual(player.second_wind_uses, 0)
-                self.assertEqual(player.hit_dice_remaining, 0)
+        player = Player(hp=0, second_wind_uses=0, hit_dice_remaining=0)
+        player.long_rest()
+        self.assertEqual(player.hp, 0)
+        self.assertTrue(player.dead)
+        self.assertEqual(player.second_wind_uses, 0)
+        self.assertEqual(player.hit_dice_remaining, 0)
 
     def test_fourth_level_fighter_can_recover_three_second_wind_uses(self):
         player = Player()
@@ -309,53 +248,130 @@ class PlayerTests(unittest.TestCase):
         self.assertTrue(player.dead)
 
 
-class DeathSaveTests(unittest.TestCase):
-    def test_ten_is_a_success_and_nine_is_a_failure(self):
-        player = Player(hp=0)
-        self.assertEqual(player.death_save(FixedRolls(10)), "success")
-        self.assertEqual(player.death_save(FixedRolls(9)), "failure")
-        self.assertEqual((player.death_save_successes, player.death_save_failures), (1, 1))
-        self.assertTrue(player.is_alive)
+class InstantDeathTests(unittest.TestCase):
+    def test_exact_hit_point_loss_kills_each_class_immediately(self):
+        for class_id in ("fighter", "rogue", "wizard"):
+            with self.subTest(class_id=class_id):
+                player = Player.create(class_id=class_id)
+                hit_points = player.hp
+                self.assertEqual(player.take_damage(hit_points), hit_points)
+                self.assertEqual(player.hp, 0)
+                self.assertTrue(player.dead)
+                self.assertFalse(player.is_alive)
+                self.assertFalse(player.is_conscious)
 
-    def test_natural_one_counts_two_failures(self):
-        player = Player(hp=0)
-        self.assertEqual(player.death_save(FixedRolls(1)), "failure")
-        self.assertEqual(player.death_save_failures, 2)
-        self.assertEqual(player.death_save(FixedRolls(9)), "dead")
-        self.assertTrue(player.dead)
+    def test_overkill_clamps_loss_and_is_not_required_for_death(self):
+        for damage in (3, 4, 14, 15, 100):
+            with self.subTest(damage=damage):
+                player = Player(hp=3)
+                self.assertEqual(player.take_damage(damage), 3)
+                self.assertEqual(player.hp, 0)
+                self.assertTrue(player.dead)
+                self.assertEqual(player.take_damage(1), 0)
 
-    def test_natural_twenty_restores_one_hp_and_clears_all_saves(self):
-        player = Player(hp=0, death_save_successes=2, death_save_failures=2)
-        self.assertEqual(player.death_save(FixedRolls(20)), "natural20")
+    def test_critical_flag_uses_the_same_zero_hp_death_rule(self):
+        for critical in (False, True):
+            with self.subTest(critical=critical):
+                player = Player(hp=5)
+                self.assertEqual(player.take_damage(4, critical=critical), 4)
+                self.assertTrue(player.is_alive)
+                self.assertEqual(player.take_damage(1, critical=critical), 1)
+                self.assertTrue(player.dead)
+
+    def test_zero_damage_preserves_a_living_character(self):
+        player = Player(hp=1)
+        self.assertEqual(player.take_damage(0, critical=True), 0)
         self.assertEqual(player.hp, 1)
-        self.assertTrue(player.is_conscious)
-        self.assertEqual((player.death_save_successes, player.death_save_failures), (0, 0))
-        self.assertFalse(player.stable)
-
-    def test_three_successes_stabilize_without_restoring_hp(self):
-        player = Player(hp=0, death_save_failures=1)
-        rng = FixedRolls(10, 12, 19)
-        self.assertEqual(player.death_save(rng), "success")
-        self.assertEqual(player.death_save(rng), "success")
-        self.assertEqual(player.death_save(rng), "stable")
-        self.assertTrue(player.stable)
         self.assertTrue(player.is_alive)
-        self.assertFalse(player.is_conscious)
+
+    def test_nonpositive_constructor_hp_is_clamped_and_dead(self):
+        for health in (0, -1, -100):
+            with self.subTest(health=health):
+                player = Player(hp=health)
+                self.assertEqual(player.hp, 0)
+                self.assertTrue(player.dead)
+                self.assertFalse(player.is_alive)
+                self.assertFalse(player.is_conscious)
+
+    def test_healing_and_potions_cannot_revive_or_spend_resources(self):
+        player = Player()
+        player.take_damage(player.hp)
+        potions_before = player.potions
+        rng = FixedRolls()
+        self.assertEqual(player.heal(100), 0)
+        self.assertEqual(player.use_potion(rng), 0)
+        self.assertEqual((player.hp, player.potions), (0, potions_before))
+        self.assertTrue(player.dead)
+        self.assertEqual(rng.calls, [])
+
+    def test_fighter_recovery_does_not_roll_or_spend_resources_when_dead(self):
+        player = Player()
+        player.take_damage(player.hp)
+        wind_before = player.second_wind_uses
+        dice_before = player.hit_dice_remaining
+        rng = FixedRolls()
+        self.assertEqual(player.second_wind(rng), 0)
+        self.assertEqual(player.spend_hit_die(rng), 0)
+        self.assertEqual(player.second_wind_uses, wind_before)
+        self.assertEqual(player.hit_dice_remaining, dice_before)
         self.assertEqual(player.hp, 0)
-        self.assertEqual((player.death_save_successes, player.death_save_failures), (0, 0))
-        self.assertEqual(player.death_save(FixedRolls()), "stable")
+        self.assertEqual(rng.calls, [])
 
-    def test_three_ordinary_failures_kill_even_with_two_successes(self):
-        player = Player(hp=0, death_save_successes=2)
-        rng = FixedRolls(2, 5, 9)
-        self.assertEqual(player.death_save(rng), "failure")
-        self.assertEqual(player.death_save(rng), "failure")
-        self.assertEqual(player.death_save(rng), "dead")
+    def test_dead_wizard_cannot_spend_or_recover_slots(self):
+        player = Player.create(class_id="wizard")
+        self.assertTrue(player.spend_spell_slot(1))
+        player.take_damage(player.hp)
+        slots_before = dict(player.spell_slots)
+        self.assertFalse(player.spend_spell_slot(1))
+        self.assertEqual(player.recover_arcane_slots(), {})
+        self.assertFalse(player.restore_level_one_slot())
+        self.assertEqual(player.spell_slots, slots_before)
+        self.assertTrue(player.arcane_recovery_available)
+
+    def test_rest_does_not_restore_any_class_after_death(self):
+        for class_id in ("fighter", "rogue", "wizard"):
+            with self.subTest(class_id=class_id):
+                player = Player.create(class_id=class_id)
+                player.second_wind_uses = 0
+                player.hit_dice_remaining = 0
+                player.action_surge_available = False
+                player.spell_slots = {level: 0 for level in player.max_spell_slots}
+                player.arcane_recovery_available = False
+                player.take_damage(player.hp)
+                slots_before = dict(player.spell_slots)
+                player.refresh_short_rest()
+                player.long_rest()
+                self.assertEqual(player.hp, 0)
+                self.assertTrue(player.dead)
+                self.assertEqual(player.second_wind_uses, 0)
+                self.assertEqual(player.hit_dice_remaining, 0)
+                self.assertFalse(player.action_surge_available)
+                self.assertEqual(player.spell_slots, slots_before)
+                self.assertFalse(player.arcane_recovery_available)
+
+    def test_level_progression_never_revives_a_dead_character(self):
+        for class_id in ("fighter", "rogue", "wizard"):
+            with self.subTest(class_id=class_id):
+                player = Player.create(class_id=class_id)
+                player.take_damage(player.hp)
+                maximum_before = player.max_hp
+                self.assertEqual(player.gain_xp(900), 2)
+                self.assertEqual(player.level, 3)
+                self.assertGreater(player.max_hp, maximum_before)
+                self.assertEqual(player.hp, 0)
+                self.assertTrue(player.dead)
+                self.assertFalse(player.is_alive)
+
+    def test_direct_zero_hp_is_treated_as_dead_by_recovery_guards(self):
+        player = Player()
+        player.hp = 0
         self.assertFalse(player.is_alive)
-
-    def test_conscious_and_dead_characters_do_not_roll_death_saves(self):
-        self.assertEqual(Player().death_save(FixedRolls()), "conscious")
-        self.assertEqual(Player(hp=0, dead=True).death_save(FixedRolls()), "dead")
+        self.assertFalse(player.is_conscious)
+        self.assertEqual(player.heal(10), 0)
+        self.assertEqual(player.use_potion(FixedRolls()), 0)
+        self.assertEqual(player.potions, 3)
+        player.take_damage(0)
+        self.assertTrue(player.dead)
 
 
 class EnemyTests(unittest.TestCase):
@@ -433,14 +449,16 @@ class DungeonTests(unittest.TestCase):
                 self.assertIsNone(entrance.loot)
                 boss_rooms = [room for room in dungeon.rooms.values() if room.enemy and room.enemy.boss]
                 ordinary = [room for room in dungeon.rooms.values() if room.enemy and not room.enemy.boss]
-                treasures = [room for room in dungeon.rooms.values() if room.loot]
+                safe_rooms = [room for room in dungeon.rooms.values()
+                              if room.position != dungeon.start and not room.enemy]
                 self.assertEqual(len(boss_rooms), 1)
                 self.assertEqual(boss_rooms[0].position, dungeon.boss_position)
                 self.assertEqual(len(ordinary), 6)
                 self.assertGreaterEqual(sum(room.enemy.xp_reward for room in ordinary), 300)
-                self.assertEqual(len(treasures), 4)
+                self.assertEqual(len(safe_rooms), 4)
                 for room in dungeon.rooms.values():
-                    self.assertFalse(room.enemy and room.loot)
+                    if room.loot:
+                        self.assertTrue(room.loot.has_treasure)
 
     def test_monsters_begin_alive_with_valid_combat_and_reward_stats(self):
         for seed in range(20):
@@ -462,21 +480,28 @@ class DungeonTests(unittest.TestCase):
                         self.assertGreaterEqual(enemy.gold_reward, 0)
                         self.assertTrue(enemy.is_alive)
 
-    def test_every_dungeon_provides_potions_and_an_early_weapon_upgrade(self):
-        for seed in range(50):
+    def test_room_drops_are_valid_and_neither_potions_nor_magic_are_guaranteed(self):
+        without_magic = without_potions = 0
+        for seed in range(100):
             with self.subTest(seed=seed):
                 dungeon = Dungeon(random.Random(seed))
                 loot_rooms = [room for room in dungeon.rooms.values() if room.loot]
-                self.assertGreater(sum(room.loot.potions for room in loot_rooms), 0)
-                upgrades = [room for room in loot_rooms if room.loot.weapon_bonus > Player().weapon_bonus]
-                self.assertTrue(upgrades)
-                adjacent = set(dungeon.get_room(dungeon.start).exits.values())
-                self.assertTrue(any(room.position in adjacent for room in upgrades))
+                without_magic += not any(item.bonus for room in loot_rooms
+                                         for item in room.loot.equipment)
+                without_potions += not any(room.loot.potions for room in loot_rooms)
                 for room in loot_rooms:
                     loot = room.loot
-                    self.assertTrue(loot.gold or loot.potions or loot.weapon_bonus)
-                    if loot.weapon_bonus:
-                        self.assertTrue(loot.weapon_name)
+                    self.assertTrue(loot.has_treasure)
+                    self.assertGreaterEqual(loot.gold, 0)
+                    self.assertIn(loot.potions, (0, 1))
+                    self.assertLessEqual(len(loot.equipment), 1)
+                    self.assertIsNone(loot.weapon_name)
+                    self.assertIsNone(loot.armor_name)
+                    for item in loot.equipment:
+                        self.assertTrue(item.name)
+                        self.assertIn(item.bonus, (0, 1, 2, 3))
+        self.assertGreater(without_magic, 0)
+        self.assertGreater(without_potions, 0)
 
     def test_map_hides_unvisited_contents_and_marks_current_room(self):
         dungeon = Dungeon(random.Random(9))
@@ -489,7 +514,8 @@ class DungeonTests(unittest.TestCase):
     def test_map_reveals_encounters_and_updates_cleared_rooms(self):
         dungeon = Dungeon(random.Random(9))
         enemy_room = next(room for room in dungeon.rooms.values() if room.enemy and not room.enemy.boss)
-        treasure_room = next(room for room in dungeon.rooms.values() if room.loot)
+        treasure_room = next(room for room in dungeon.rooms.values()
+                             if room.loot and room.loot.has_treasure and not room.enemy)
         boss_room = dungeon.get_room(dungeon.boss_position)
         for room in (enemy_room, treasure_room, boss_room):
             room.visited = True

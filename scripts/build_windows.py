@@ -1,4 +1,4 @@
-"""Package the game as a standalone Windows console executable.
+"""Package the desktop game and its terminal alternative for Windows.
 
 Run this script using 64-bit Python 3.12 on Windows after installing
 requirements-build.txt. PyInstaller does not cross-compile from Linux or
@@ -6,10 +6,25 @@ macOS to Windows.
 """
 
 from importlib.metadata import PackageNotFoundError, version
+import hashlib
+import json
 from pathlib import Path
+import shutil
 import struct
 import subprocess
 import sys
+import tempfile
+
+if __package__:
+    from .collect_licenses import (
+        NoticeError, audit_analysis, collect_notices, copy_notices, verify_embedded_notices,
+    )
+    from .verify_art_assets import AssetError, stage_art_assets, verify_embedded_art
+else:
+    from collect_licenses import (
+        NoticeError, audit_analysis, collect_notices, copy_notices, verify_embedded_notices,
+    )
+    from verify_art_assets import AssetError, stage_art_assets, verify_embedded_art
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -17,7 +32,7 @@ PYINSTALLER_VERSION = "6.16.0"
 
 
 def main() -> int:
-    """Validate the build environment and create the Windows executable."""
+    """Validate the build environment and create both Windows executables."""
     if sys.platform != "win32":
         print(
             "Build this Windows executable on Windows. PyInstaller cannot "
@@ -54,41 +69,110 @@ def main() -> int:
     build_directory = ROOT / "build"
     build_directory.mkdir(parents=True, exist_ok=True)
     try:
-        subprocess.run(
-            [
-                sys.executable,
-                "-m",
-                "PyInstaller",
-                "--noconfirm",
-                "--clean",
-                "--onefile",
-                "--console",
-                "--name",
-                "CatacombsOfThalinor",
-                "--distpath",
-                str(ROOT / "dist"),
-                "--workpath",
-                str(build_directory),
-                "--specpath",
-                str(build_directory),
-                str(ROOT / "Main.py"),
-            ],
-            cwd=ROOT,
-            check=True,
-        )
-    except subprocess.CalledProcessError as error:
-        print(
-            f"PyInstaller failed with exit code {error.returncode}.",
-            file=sys.stderr,
-        )
-        return error.returncode or 1
-
-    executable = ROOT / "dist" / "CatacombsOfThalinor.exe"
-    if not executable.is_file():
-        print(f"Build did not produce the expected executable: {executable}", file=sys.stderr)
+        artwork, art_records = stage_art_assets(ROOT, build_directory / "artwork-bundle")
+        notices = collect_notices(ROOT, build_directory / "license-bundle")
+        # Keep the artwork's source record readable in the existing license
+        # browser and ZIP legal/ folder as well as beside the embedded sprites.
+        provenance = artwork / "realistic" / "asset_sources.json"
+        shutil.copy2(provenance, notices / "legal" / "artwork-sources.json")
+        room_provenance = artwork / "rooms" / "asset_sources.json"
+        shutil.copy2(room_provenance, notices / "legal" / "room-artwork-sources.json")
+    except (AssetError, NoticeError, OSError, UnicodeError) as error:
+        print(f"Release resource collection failed: {error}", file=sys.stderr)
         return 1
+    targets = (
+        ("CatacombsOfThalinor", "GuiMain.py", "--windowed"),
+        ("CatacombsOfThalinor-Terminal", "Main.py", "--console"),
+    )
+    binaries = []
+    for name, entry_point, window_mode in targets:
+        art_arguments = (["--add-data", f"{artwork}:assets"]
+                         if window_mode == "--windowed" else [])
+        try:
+            subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "PyInstaller",
+                    "--noconfirm",
+                    "--clean",
+                    "--onefile",
+                    window_mode,
+                    "--name",
+                    name,
+                    "--distpath",
+                    str(ROOT / "dist"),
+                    "--workpath",
+                    str(build_directory),
+                    "--specpath",
+                    str(build_directory),
+                    "--add-data",
+                    f"{notices / 'CREDITS.txt'}:.",
+                    "--add-data",
+                    f"{notices / 'legal'}:legal",
+                    *art_arguments,
+                    str(ROOT / entry_point),
+                ],
+                cwd=ROOT,
+                check=True,
+            )
+        except subprocess.CalledProcessError as error:
+            print(
+                f"PyInstaller failed while building {name} with exit code {error.returncode}.",
+                file=sys.stderr,
+            )
+            return error.returncode or 1
 
-    print(f"Windows executable ready: {executable}")
+        executable = ROOT / "dist" / f"{name}.exe"
+        if not executable.is_file():
+            print(f"Build did not produce the expected executable: {executable}", file=sys.stderr)
+            return 1
+        try:
+            verify_embedded_notices(executable, notices)
+            if art_arguments:
+                verify_embedded_art(executable, artwork)
+            dependencies = audit_analysis(build_directory / name / "Analysis-00.toc", Path(sys.base_prefix))
+        except (AssetError, NoticeError, OSError, UnicodeError, ValueError) as error:
+            print(f"Release resource verification failed: {error}", file=sys.stderr)
+            return 1
+        binaries.append({"executable": executable.name,
+                         "sha256": hashlib.sha256(executable.read_bytes()).hexdigest(),
+                         "artwork": art_records if art_arguments else [],
+                         "native_dependencies": dependencies})
+        print(f"Windows executable ready: {executable}")
+
+    try:
+        copy_notices(notices, ROOT / "dist")
+        manifest = {"notice_manifest": "legal/runtime/notice-manifest.json", "executables": binaries,
+                    "artwork": art_records,
+                    "artwork_provenance": {
+                        "path": "legal/artwork-sources.json",
+                        "sha256": hashlib.sha256(provenance.read_bytes()).hexdigest()},
+                    "room_artwork_provenance": {
+                        "path": "legal/room-artwork-sources.json",
+                        "sha256": hashlib.sha256(room_provenance.read_bytes()).hexdigest()},
+                    "embedded_notice_files": [
+                        {"path": path.relative_to(notices).as_posix(),
+                         "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
+                        for path in sorted(notices.rglob("*")) if path.is_file()]}
+        (ROOT / "dist" / "build-manifest.json").write_text(
+            json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+        # A copied EXE must still be able to display the embedded attribution.
+        # Running outside the checkout catches accidental source-file reliance.
+        with tempfile.TemporaryDirectory(prefix="thalinor-credits-") as unrelated:
+            result = subprocess.run(
+                [str(ROOT / "dist" / "CatacombsOfThalinor-Terminal.exe"), "--credits"],
+                cwd=unrelated, capture_output=True, check=True, timeout=45,
+            )
+            if b"System Reference Document" not in result.stdout:
+                raise NoticeError("Packaged --credits did not display the embedded SRD attribution.")
+    except (NoticeError, OSError, subprocess.SubprocessError) as error:
+        print(f"Distribution notice verification failed: {error}", file=sys.stderr)
+        return 1
+    print("Project credits, runtime license texts, native dependency inventory and hashes verified.")
+    print("Original sprite atlases, provenance record and embedded artwork hashes verified.")
+    print("All sixty room portraits, room provenance and embedded room artwork hashes verified.")
+    print("All fifteen themed doorway cutouts and their provenance hashes verified.")
     return 0
 
 

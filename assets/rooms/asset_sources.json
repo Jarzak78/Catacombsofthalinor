@@ -1,0 +1,1073 @@
+{
+  "version": 1,
+  "created": "2026-11-16",
+  "project": "Catacombs of Thalinor",
+  "generator": {
+    "service": "OpenAI image generation",
+    "tool": "image_gen",
+    "model": "Tool-selected; exact model/version not reported"
+  },
+  "source": "Original room paintings and passageway cutouts generated for this project from its authored room descriptions and recorded prompts. No outside image pack, franchise illustration, named-artist style, logo, font, music or real-person likeness reference was supplied.",
+  "rights_note": "AI-assisted project artwork, subject to the applicable service terms. This record does not guarantee uniqueness, copyrightability, exclusive ownership, or comprehensive legal clearance. It does not select a whole-project license or change the independent SRD and software permissions.",
+  "processing": "Original generated PNG files are retained unchanged in assets/rooms. Runtime uses the standard library to extract exact atlas cells, crop/resize backgrounds, and scale alpha-aware passage cutouts; no runtime image-library dependency. Separate dynamic enemies, hands, loot, documents and portals remain independent of the paintings. Rear-passage placements are authored in each painting's coordinates and projected through the same viewport crop; large foreground fixtures can intentionally obscure a far passage without changing dungeon navigation.",
+  "atlases": [
+    {
+      "file": "floor_1.png",
+      "width": 1254,
+      "height": 1254,
+      "bytes": 3343162,
+      "sha256": "c23ea2712939f2e295086b76351b69a08cb8c64466d121d9f87382e41e82b48f",
+      "git_sha": "b45655de8b4ee8faa17f7506fe68e828bd58cf08",
+      "floor": 1,
+      "columns": 2,
+      "rows": 6,
+      "source_type": "project-generated original",
+      "prompt": "Create one ORIGINAL game environment art atlas, a perfectly SQUARE large PNG contact sheet. STRICT LAYOUT: exactly TWO equal columns and SIX equal rows, TWELVE separate rectangular landscape scenes. Each tile is 3:1 wide, all tiles aligned to the exact equal grid edge-to-edge, NO margins, NO gutters, NO borders, NO captions, NO panel numbers. This is a 2D first-person dark fantasy dungeon game background atlas, original realistic physically based environment concept art with rich weathered materials, convincing lighting and depth. Every tile is a DIFFERENT chamber. The viewer stands inside each chamber at human eye height, wide horizontal view, floor visible in lower third, environment in upper two thirds. Keep the central lower/middle standing area clear for a separately rendered enemy; place unique room landmarks to the sides and rear, still large/readable. No adventurer, no first-person hands, no monsters, no living people, no bosses, no weapons floating in foreground, no HUD/UI, no actual written words/letters/logos/watermark. Inscriptions and documents are atmospheric illegible marks, never readable text. Do not add treasure chests, gold piles, potion bottles or collectible gear unless the description explicitly calls for a decorative object, because loot will be drawn separately. Use sealed/dark walls at the far center and peripheral blank stone wall zones for separately drawn actual passageway overlays; do not invent extra open exits. Any described portal is CLOSED/inactive; any described guardian is omitted but keep its architecture. All twelve scenes should remain clearly visible and distinct, not blended across tile boundaries. No copying franchise art or named artist style. FLOOR ATMOSPHERE: moonlit upper burial catacombs; gray worn limestone, dusty blue moonlight and warm lantern fill; solemn royal tombs. EXACT TILE ORDER, row by row left to right then next row. Each entry gives its landmark and exact atmosphere to depict (do not print these titles): Row 1, LEFT: The Broken Stair. Moonlight spills down a cracked stairway. Your first dungeon awaits: reach Thalinor's inner chamber and defeat its warden to prove yourself. | Row 1, RIGHT: Hall of Whispering Kings. Broken statues watch from the shadows. Your footsteps stir whispers from mouths carved in stone. | Row 2, LEFT: The Rootbound Vault. Pale roots push through the ceiling, winding around empty stone coffins like the fingers of a giant hand. | Row 2, RIGHT: Chapel of the Last Light. A silver altar catches the glow of your lantern. The candles around it have been cold for centuries. | Row 3, LEFT: The Sunken Gallery. Dark water fills the grooves between flagstones. Torn banners cling to the walls above a forgotten battlefield mural. | Row 3, RIGHT: The Ashen Armory. Rusting weapon racks line the walls. Beneath the dust, a few old runes still flicker with stubborn light. | Row 4, LEFT: The Scribe's Tomb. Fragments of parchment cover a stone desk. A faded inscription lists the names of adventurers who once completed this trial. | Row 4, RIGHT: The Echoing Well. A dry well opens in the center of the chamber. Every sound returns from its depths a heartbeat too late. | Row 5, LEFT: The Hall of Chains. Heavy chains hang from the ceiling. They sway despite the still air, clicking softly against one another. | Row 5, RIGHT: The Pilgrim's Refuge. A stone bench and a shattered waterskin mark an old resting place. Someone scratched a tiny sun into the wall. | Row 6, LEFT: The Starless Observatory. A collapsed dome reveals only solid rock. Tarnished bronze rings once tracked stars that Thalinor no longer sees. | Row 6, RIGHT: The Warden's Sanctum. Blue fire surrounds the throne of the upper tombs. The Warden raises its blade before a sealed arch. Beyond it, roots strain against the stone; this guardian protects the first threshold, not the end of the catacombs.",
+      "panels": [
+        {
+          "id": "floor_1_room_00",
+          "cell": 0,
+          "name": "The Broken Stair",
+          "description": "Moonlight spills down a cracked stairway. Your first dungeon awaits: reach Thalinor's inner chamber and defeat its warden to prove yourself.",
+          "landmarks": [
+            "cracked stairway",
+            "moonlight"
+          ],
+          "front_passage": [
+            0.77,
+            0.8,
+            0.12,
+            0.52
+          ]
+        },
+        {
+          "id": "floor_1_room_01",
+          "cell": 1,
+          "name": "Hall of Whispering Kings",
+          "description": "Broken statues watch from the shadows. Your footsteps stir whispers from mouths carved in stone.",
+          "landmarks": [
+            "broken statues",
+            "carved stone mouths"
+          ],
+          "front_passage": [
+            0.5,
+            0.8,
+            0.14,
+            0.55
+          ]
+        },
+        {
+          "id": "floor_1_room_02",
+          "cell": 2,
+          "name": "The Rootbound Vault",
+          "description": "Pale roots push through the ceiling, winding around empty stone coffins like the fingers of a giant hand.",
+          "landmarks": [
+            "pale ceiling roots",
+            "empty stone coffins"
+          ],
+          "front_passage": [
+            0.95,
+            0.82,
+            0.075,
+            0.5
+          ]
+        },
+        {
+          "id": "floor_1_room_03",
+          "cell": 3,
+          "name": "Chapel of the Last Light",
+          "description": "A silver altar catches the glow of your lantern. The candles around it have been cold for centuries.",
+          "landmarks": [
+            "silver altar",
+            "cold candles"
+          ],
+          "front_passage": [
+            0.16,
+            0.8,
+            0.11,
+            0.48
+          ]
+        },
+        {
+          "id": "floor_1_room_04",
+          "cell": 4,
+          "name": "The Sunken Gallery",
+          "description": "Dark water fills the grooves between flagstones. Torn banners cling to the walls above a forgotten battlefield mural.",
+          "landmarks": [
+            "water between flagstones",
+            "torn banners",
+            "battlefield mural"
+          ],
+          "front_passage": [
+            0.125,
+            0.8,
+            0.1,
+            0.5
+          ]
+        },
+        {
+          "id": "floor_1_room_05",
+          "cell": 5,
+          "name": "The Ashen Armory",
+          "description": "Rusting weapon racks line the walls. Beneath the dust, a few old runes still flicker with stubborn light.",
+          "landmarks": [
+            "rusting weapon racks",
+            "faint runes"
+          ],
+          "front_passage": [
+            0.5,
+            0.8,
+            0.14,
+            0.56
+          ]
+        },
+        {
+          "id": "floor_1_room_06",
+          "cell": 6,
+          "name": "The Scribe's Tomb",
+          "description": "Fragments of parchment cover a stone desk. A faded inscription lists the names of adventurers who once completed this trial.",
+          "landmarks": [
+            "stone desk",
+            "parchment fragments",
+            "faded inscription"
+          ],
+          "front_passage": [
+            0.93,
+            0.8,
+            0.09,
+            0.48
+          ]
+        },
+        {
+          "id": "floor_1_room_07",
+          "cell": 7,
+          "name": "The Echoing Well",
+          "description": "A dry well opens in the center of the chamber. Every sound returns from its depths a heartbeat too late.",
+          "landmarks": [
+            "central dry well"
+          ],
+          "front_passage": [
+            0.2,
+            0.8,
+            0.12,
+            0.48
+          ]
+        },
+        {
+          "id": "floor_1_room_08",
+          "cell": 8,
+          "name": "The Hall of Chains",
+          "description": "Heavy chains hang from the ceiling. They sway despite the still air, clicking softly against one another.",
+          "landmarks": [
+            "heavy hanging chains"
+          ],
+          "front_passage": [
+            0.56,
+            0.8,
+            0.11,
+            0.48
+          ]
+        },
+        {
+          "id": "floor_1_room_09",
+          "cell": 9,
+          "name": "The Pilgrim's Refuge",
+          "description": "A stone bench and a shattered waterskin mark an old resting place. Someone scratched a tiny sun into the wall.",
+          "landmarks": [
+            "stone bench",
+            "shattered waterskin",
+            "scratched sun"
+          ],
+          "front_passage": [
+            0.24,
+            0.82,
+            0.12,
+            0.48
+          ]
+        },
+        {
+          "id": "floor_1_room_10",
+          "cell": 10,
+          "name": "The Starless Observatory",
+          "description": "A collapsed dome reveals only solid rock. Tarnished bronze rings once tracked stars that Thalinor no longer sees.",
+          "landmarks": [
+            "collapsed dome",
+            "solid rock ceiling",
+            "bronze astronomical rings"
+          ],
+          "front_passage": null
+        },
+        {
+          "id": "floor_1_room_11",
+          "cell": 11,
+          "name": "The Warden's Sanctum",
+          "description": "Blue fire surrounds the throne of the upper tombs. The Warden raises its blade before a sealed arch. Beyond it, roots strain against the stone; this guardian protects the first threshold, not the end of the catacombs.",
+          "landmarks": [
+            "blue fire",
+            "ancient throne",
+            "sealed arch",
+            "straining roots"
+          ],
+          "front_passage": [
+            0.52,
+            0.82,
+            0.075,
+            0.5
+          ]
+        }
+      ]
+    },
+    {
+      "file": "floor_2.png",
+      "width": 1254,
+      "height": 1254,
+      "bytes": 3654214,
+      "sha256": "2e831dbbbe0375978f1bbe2d3902b175aa3a7cb233e2eed721100dd0e62f1ef1",
+      "git_sha": "3dd0fc1b6f3aaccc457121be53af131f57f2406e",
+      "floor": 2,
+      "columns": 2,
+      "rows": 6,
+      "source_type": "project-generated original",
+      "prompt": "Create one ORIGINAL game environment art atlas, a perfectly SQUARE large PNG contact sheet. STRICT LAYOUT: exactly TWO equal columns and SIX equal rows, TWELVE separate rectangular landscape scenes. Each tile is 3:1 wide, all tiles aligned to the exact equal grid edge-to-edge, NO margins, NO gutters, NO borders, NO captions, NO panel numbers. This is a 2D first-person dark fantasy dungeon game background atlas, original realistic physically based environment concept art with rich weathered materials, convincing lighting and depth. Every tile is a DIFFERENT chamber. The viewer stands inside each chamber at human eye height, wide horizontal view, floor visible in lower third, environment in upper two thirds. Keep the central lower/middle standing area clear for a separately rendered enemy; place unique room landmarks to the sides and rear, still large/readable. No adventurer, no first-person hands, no monsters, no living people, no bosses, no weapons floating in foreground, no HUD/UI, no actual written words/letters/logos/watermark. Inscriptions and documents are atmospheric illegible marks, never readable text. Do not add treasure chests, gold piles, potion bottles or collectible gear unless the description explicitly calls for a decorative object, because loot will be drawn separately. Use sealed/dark walls at the far center and peripheral blank stone wall zones for separately drawn actual passageway overlays; do not invent extra open exits. Any described portal is CLOSED/inactive; any described guardian is omitted but keep its architecture. All twelve scenes should remain clearly visible and distinct, not blended across tile boundaries. No copying franchise art or named artist style. FLOOR ATMOSPHERE: buried binding grove below the city foundations; woven roots, moss, amber sap, dark green stone, pale fungus, damp hidden garden. EXACT TILE ORDER, row by row left to right then next row. Each entry gives its landmark and exact atmosphere to depict (do not print these titles): Row 1, LEFT: The Tangled Threshold. Mira's portal closes behind you in a cavern of woven roots. No moonlight reaches this depth. Warm sap runs down a stair carved through the foundations of the upper tombs. | Row 1, RIGHT: The Saplit Walk. Amber sap pools along a root-covered walkway. Within its glow, trapped insects cast shadows larger than your shield. | Row 2, LEFT: The Gardener's Crypt. A skeleton kneels beside a dry watering bowl. Its stone nameplate calls it keeper of the binding grove; roots have grown through both hands. | Row 2, RIGHT: The Drowned Nursery. Black water laps against rows of broken seed jars. A mural shows saplings planted above a red wound in the earth. | Row 3, LEFT: The Thorn Gate. Barbed vines lace a collapsed gate. Old pruning hooks hang beyond it, their handles polished by generations of forgotten wardens. | Row 3, RIGHT: The Spore Chapel. Pale mushrooms cover a shrine to the city's gardeners. Spores drift through your lantern beam, revealing a warning: do not let the roots wither. | Row 4, LEFT: The Root Archive. Clay tablets are wedged between thick roots. One records shipments of furnace ash, delivered here long after the city above was abandoned. | Row 4, RIGHT: The Hollow Oak. A petrified trunk fills the chamber. Through a split in its bark you hear the steady clanging of machinery far below. | Row 5, LEFT: The Binding Circle. Roots follow silver channels cut into the floor. Several channels have snapped, and hot air whistles through the fractures. | Row 5, RIGHT: The Keeper's Refuge. A moss-covered bench stands beside a wall of tally marks. The last entry reads: the forge burns, but the king no longer answers. | Row 6, LEFT: The Ember Well. Red light flickers at the bottom of a shaft wrapped in roots. Drops of sap fall into the darkness and hiss against unseen metal. | Row 6, RIGHT: The Heartwood Cage. An enormous root coils around a cracked furnace hatch. The Thornbound Sentinel pulls itself from the living wood, guarding the way to the heat that feeds this buried grove.",
+      "panels": [
+        {
+          "id": "floor_2_room_00",
+          "cell": 0,
+          "name": "The Tangled Threshold",
+          "description": "Mira's portal closes behind you in a cavern of woven roots. No moonlight reaches this depth. Warm sap runs down a stair carved through the foundations of the upper tombs.",
+          "landmarks": [
+            "woven roots",
+            "warm sap",
+            "foundation stair"
+          ],
+          "front_passage": [
+            0.7,
+            0.66,
+            0.12,
+            0.5
+          ]
+        },
+        {
+          "id": "floor_2_room_01",
+          "cell": 1,
+          "name": "The Saplit Walk",
+          "description": "Amber sap pools along a root-covered walkway. Within its glow, trapped insects cast shadows larger than your shield.",
+          "landmarks": [
+            "root-covered walkway",
+            "amber sap",
+            "trapped insects"
+          ],
+          "front_passage": [
+            0.5,
+            0.53,
+            0.11,
+            0.45
+          ]
+        },
+        {
+          "id": "floor_2_room_02",
+          "cell": 2,
+          "name": "The Gardener's Crypt",
+          "description": "A skeleton kneels beside a dry watering bowl. Its stone nameplate calls it keeper of the binding grove; roots have grown through both hands.",
+          "landmarks": [
+            "kneeling skeleton",
+            "dry watering bowl",
+            "roots through hands"
+          ],
+          "front_passage": [
+            0.74,
+            0.67,
+            0.12,
+            0.5
+          ]
+        },
+        {
+          "id": "floor_2_room_03",
+          "cell": 3,
+          "name": "The Drowned Nursery",
+          "description": "Black water laps against rows of broken seed jars. A mural shows saplings planted above a red wound in the earth.",
+          "landmarks": [
+            "black water",
+            "broken seed jars",
+            "sapling mural"
+          ],
+          "front_passage": null
+        },
+        {
+          "id": "floor_2_room_04",
+          "cell": 4,
+          "name": "The Thorn Gate",
+          "description": "Barbed vines lace a collapsed gate. Old pruning hooks hang beyond it, their handles polished by generations of forgotten wardens.",
+          "landmarks": [
+            "collapsed gate",
+            "barbed vines",
+            "pruning hooks"
+          ],
+          "front_passage": [
+            0.92,
+            0.82,
+            0.08,
+            0.47
+          ]
+        },
+        {
+          "id": "floor_2_room_05",
+          "cell": 5,
+          "name": "The Spore Chapel",
+          "description": "Pale mushrooms cover a shrine to the city's gardeners. Spores drift through your lantern beam, revealing a warning: do not let the roots wither.",
+          "landmarks": [
+            "pale mushrooms",
+            "gardener shrine",
+            "drifting spores"
+          ],
+          "front_passage": [
+            0.94,
+            0.76,
+            0.075,
+            0.42
+          ]
+        },
+        {
+          "id": "floor_2_room_06",
+          "cell": 6,
+          "name": "The Root Archive",
+          "description": "Clay tablets are wedged between thick roots. One records shipments of furnace ash, delivered here long after the city above was abandoned.",
+          "landmarks": [
+            "clay tablets",
+            "thick roots"
+          ],
+          "front_passage": [
+            0.9,
+            0.8,
+            0.08,
+            0.43
+          ]
+        },
+        {
+          "id": "floor_2_room_07",
+          "cell": 7,
+          "name": "The Hollow Oak",
+          "description": "A petrified trunk fills the chamber. Through a split in its bark you hear the steady clanging of machinery far below.",
+          "landmarks": [
+            "split petrified trunk"
+          ],
+          "front_passage": [
+            0.16,
+            0.8,
+            0.1,
+            0.46
+          ]
+        },
+        {
+          "id": "floor_2_room_08",
+          "cell": 8,
+          "name": "The Binding Circle",
+          "description": "Roots follow silver channels cut into the floor. Several channels have snapped, and hot air whistles through the fractures.",
+          "landmarks": [
+            "silver floor channels",
+            "roots",
+            "fractured stone"
+          ],
+          "front_passage": [
+            0.5,
+            0.29,
+            0.075,
+            0.24
+          ]
+        },
+        {
+          "id": "floor_2_room_09",
+          "cell": 9,
+          "name": "The Keeper's Refuge",
+          "description": "A moss-covered bench stands beside a wall of tally marks. The last entry reads: the forge burns, but the king no longer answers.",
+          "landmarks": [
+            "moss-covered bench",
+            "wall tally marks"
+          ],
+          "front_passage": [
+            0.63,
+            0.79,
+            0.09,
+            0.45
+          ]
+        },
+        {
+          "id": "floor_2_room_10",
+          "cell": 10,
+          "name": "The Ember Well",
+          "description": "Red light flickers at the bottom of a shaft wrapped in roots. Drops of sap fall into the darkness and hiss against unseen metal.",
+          "landmarks": [
+            "root-wrapped shaft",
+            "red light",
+            "dripping sap"
+          ],
+          "front_passage": null
+        },
+        {
+          "id": "floor_2_room_11",
+          "cell": 11,
+          "name": "The Heartwood Cage",
+          "description": "An enormous root coils around a cracked furnace hatch. The Thornbound Sentinel pulls itself from the living wood, guarding the way to the heat that feeds this buried grove.",
+          "landmarks": [
+            "enormous coiling root",
+            "cracked furnace hatch"
+          ],
+          "front_passage": [
+            0.13,
+            0.81,
+            0.09,
+            0.45
+          ]
+        }
+      ]
+    },
+    {
+      "file": "floor_3.png",
+      "width": 1254,
+      "height": 1254,
+      "bytes": 2698596,
+      "sha256": "eb22ff8df2d0045215eb1c5e0343d9d0b015423cec700650f5686cf49d46c991",
+      "git_sha": "1c24f3e8b4aa7f638a4f9529cd9d71e6f27a29f6",
+      "floor": 3,
+      "columns": 2,
+      "rows": 6,
+      "source_type": "project-generated original",
+      "prompt": "Create one ORIGINAL game environment art atlas, a perfectly SQUARE large PNG contact sheet. STRICT LAYOUT: exactly TWO equal columns and SIX equal rows, TWELVE separate rectangular landscape scenes. Each tile is 3:1 wide, all tiles aligned to the exact equal grid edge-to-edge, NO margins, NO gutters, NO borders, NO captions, NO panel numbers. This is a 2D first-person dark fantasy dungeon game background atlas, original realistic physically based environment concept art with rich weathered materials, convincing lighting and depth. Every tile is a DIFFERENT chamber. The viewer stands inside each chamber at human eye height, wide horizontal view, floor visible in lower third, environment in upper two thirds. Keep the central lower/middle standing area clear for a separately rendered enemy; place unique room landmarks to the sides and rear, still large/readable. No adventurer, no first-person hands, no monsters, no living people, no bosses, no weapons floating in foreground, no HUD/UI, no actual written words/letters/logos/watermark. Inscriptions and documents are atmospheric illegible marks, never readable text. Do not add treasure chests, gold piles, potion bottles or collectible gear unless the description explicitly calls for a decorative object, because loot will be drawn separately. Use sealed/dark walls at the far center and peripheral blank stone wall zones for separately drawn actual passageway overlays; do not invent extra open exits. Any described portal is CLOSED/inactive; any described guardian is omitted but keep its architecture. All twelve scenes should remain clearly visible and distinct, not blended across tile boundaries. No copying franchise art or named artist style. FLOOR ATMOSPHERE: Ashen Forge beneath the buried grove; soot-black iron, ash, heated copper pipes, orange furnace glow, dim cold shadows. EXACT TILE ORDER, row by row left to right then next row. Each entry gives its landmark and exact atmosphere to depict (do not print these titles): Row 1, LEFT: The Cinder Landing. You step from the portal onto an iron platform beneath the grove. Charred roots hang through the ceiling, drinking warmth from pipes that shake with furnace pressure. | Row 1, RIGHT: The Bellows Hall. Leather bellows rise and fall with no hands to work them. Each breath drives sparks across a row of empty smithing stations. | Row 2, LEFT: The Slag Canal. A narrow bridge crosses a channel of cooling slag. Footprints end at its edge, burned permanently into the iron walkway. | Row 2, RIGHT: The Chain Foundry. Links taller than your torso lie in casting molds. Their runes match the broken seals in the tombs above. | Row 3, LEFT: The Master Smith's Office. An open ledger rests beneath a layer of ash. Its final order demands chains for a royal prisoner, with no name entered beside the charge. | Row 3, RIGHT: The Quenching Chamber. Steam escapes from cracked stone tanks. A silver chain hangs in the largest bath, cold enough to frost the water around it. | Row 4, LEFT: The Coal Lift. An abandoned lift drops into a soot-black shaft. A cargo label directs fuel upward to the grove and forged restraints downward to the vault. | Row 4, RIGHT: The Broken Anvil. A massive anvil has split down the middle. Something struck it from within, leaving a handprint in metal that should never have bent. | Row 5, LEFT: The Furnace Shrine. Smiths' prayer tokens hang above a flame that refuses to die. An inscription promises the fire will endure until the royal seal is restored. | Row 5, RIGHT: The Ash Barracks. Empty armor sits on benches around a cold meal. A warning scratched into a helmet reads: listen for chains, never for the voice beneath them. | Row 6, LEFT: The Pressure Gallery. Copper gauges tremble above pipes buried in the walls. The deepest pipe beats like a pulse, sending dark flecks through its glass inspection window. | Row 6, RIGHT: The Great Crucible. Molten metal lights a vast casting pit. The Ember Colossus stands across its bridge, furnace doors glowing in its chest. Behind it, chains descend through a floor too hot to touch.",
+      "panels": [
+        {
+          "id": "floor_3_room_00",
+          "cell": 0,
+          "name": "The Cinder Landing",
+          "description": "You step from the portal onto an iron platform beneath the grove. Charred roots hang through the ceiling, drinking warmth from pipes that shake with furnace pressure.",
+          "landmarks": [
+            "iron platform",
+            "charred ceiling roots",
+            "furnace pipes"
+          ],
+          "front_passage": [
+            0.5,
+            0.59,
+            0.12,
+            0.5
+          ]
+        },
+        {
+          "id": "floor_3_room_01",
+          "cell": 1,
+          "name": "The Bellows Hall",
+          "description": "Leather bellows rise and fall with no hands to work them. Each breath drives sparks across a row of empty smithing stations.",
+          "landmarks": [
+            "leather bellows",
+            "sparks",
+            "empty smithing stations"
+          ],
+          "front_passage": [
+            0.52,
+            0.6,
+            0.12,
+            0.5
+          ]
+        },
+        {
+          "id": "floor_3_room_02",
+          "cell": 2,
+          "name": "The Slag Canal",
+          "description": "A narrow bridge crosses a channel of cooling slag. Footprints end at its edge, burned permanently into the iron walkway.",
+          "landmarks": [
+            "narrow bridge",
+            "cooling slag canal",
+            "burned footprints"
+          ],
+          "front_passage": [
+            0.5,
+            0.45,
+            0.11,
+            0.44
+          ]
+        },
+        {
+          "id": "floor_3_room_03",
+          "cell": 3,
+          "name": "The Chain Foundry",
+          "description": "Links taller than your torso lie in casting molds. Their runes match the broken seals in the tombs above.",
+          "landmarks": [
+            "giant chain links",
+            "casting molds",
+            "seal runes"
+          ],
+          "front_passage": [
+            0.32,
+            0.8,
+            0.1,
+            0.47
+          ]
+        },
+        {
+          "id": "floor_3_room_04",
+          "cell": 4,
+          "name": "The Master Smith's Office",
+          "description": "An open ledger rests beneath a layer of ash. Its final order demands chains for a royal prisoner, with no name entered beside the charge.",
+          "landmarks": [
+            "ash-covered ledger",
+            "smith's office"
+          ],
+          "front_passage": [
+            0.7,
+            0.63,
+            0.12,
+            0.5
+          ]
+        },
+        {
+          "id": "floor_3_room_05",
+          "cell": 5,
+          "name": "The Quenching Chamber",
+          "description": "Steam escapes from cracked stone tanks. A silver chain hangs in the largest bath, cold enough to frost the water around it.",
+          "landmarks": [
+            "cracked quenching tanks",
+            "steam",
+            "frosted silver chain"
+          ],
+          "front_passage": [
+            0.4,
+            0.69,
+            0.09,
+            0.42
+          ]
+        },
+        {
+          "id": "floor_3_room_06",
+          "cell": 6,
+          "name": "The Coal Lift",
+          "description": "An abandoned lift drops into a soot-black shaft. A cargo label directs fuel upward to the grove and forged restraints downward to the vault.",
+          "landmarks": [
+            "abandoned lift",
+            "soot-black shaft",
+            "cargo label"
+          ],
+          "front_passage": [
+            0.83,
+            0.81,
+            0.11,
+            0.5
+          ]
+        },
+        {
+          "id": "floor_3_room_07",
+          "cell": 7,
+          "name": "The Broken Anvil",
+          "description": "A massive anvil has split down the middle. Something struck it from within, leaving a handprint in metal that should never have bent.",
+          "landmarks": [
+            "split anvil",
+            "impressed handprint"
+          ],
+          "front_passage": [
+            0.75,
+            0.7,
+            0.18,
+            0.58
+          ]
+        },
+        {
+          "id": "floor_3_room_08",
+          "cell": 8,
+          "name": "The Furnace Shrine",
+          "description": "Smiths' prayer tokens hang above a flame that refuses to die. An inscription promises the fire will endure until the royal seal is restored.",
+          "landmarks": [
+            "smiths' prayer tokens",
+            "enduring flame",
+            "inscription"
+          ],
+          "front_passage": [
+            0.13,
+            0.81,
+            0.09,
+            0.5
+          ]
+        },
+        {
+          "id": "floor_3_room_09",
+          "cell": 9,
+          "name": "The Ash Barracks",
+          "description": "Empty armor sits on benches around a cold meal. A warning scratched into a helmet reads: listen for chains, never for the voice beneath them.",
+          "landmarks": [
+            "empty armor",
+            "benches",
+            "cold meal",
+            "scratched helmet"
+          ],
+          "front_passage": [
+            0.62,
+            0.46,
+            0.085,
+            0.4
+          ]
+        },
+        {
+          "id": "floor_3_room_10",
+          "cell": 10,
+          "name": "The Pressure Gallery",
+          "description": "Copper gauges tremble above pipes buried in the walls. The deepest pipe beats like a pulse, sending dark flecks through its glass inspection window.",
+          "landmarks": [
+            "copper gauges",
+            "wall pipes",
+            "glass inspection window"
+          ],
+          "front_passage": null
+        },
+        {
+          "id": "floor_3_room_11",
+          "cell": 11,
+          "name": "The Great Crucible",
+          "description": "Molten metal lights a vast casting pit. The Ember Colossus stands across its bridge, furnace doors glowing in its chest. Behind it, chains descend through a floor too hot to touch.",
+          "landmarks": [
+            "molten casting pit",
+            "bridge",
+            "descending chains"
+          ],
+          "front_passage": [
+            0.5,
+            0.56,
+            0.1,
+            0.45
+          ]
+        }
+      ],
+      "previous_generation_sha256": "b9c8d8ff21b49f8f9ef04af70858d18faefda75719fd29b9583b9233b107ff37",
+      "revision": "Image-tool pass reduced the anvil to about half its previous on-screen dimensions and moved it farther into the chamber, preserving its split and handprint.",
+      "edit_prompt": "Edit ONLY the fourth-row RIGHT panel (row4,column2; panel8 counting row-major) of this square two-column/six-row dungeon background atlas: THE BROKEN ANVIL. The anvil currently fills almost the whole chamber and looks absurdly giant. Reduce its on-screen dimensions to ABOUT HALF of the current width and height, and place it farther into the chamber, slightly LEFT of center. It should occupy roughly 30–35% of that panel's width and 35–40% of its height, resting naturally on the workshop floor in the midground. Keep its iconic split down the middle, dark forged metal, subtle hot crack and visible impressed handprint. It can still be a heavy large workshop anvil, but leave most of the room visible: generous open floor in the foreground and center, worn stone rear wall, original furnace pipes and restrained orange forge lighting, tool rack along the right wall. Reconstruct the previously hidden wall and floor plausibly where the huge anvil used to be. Keep the far RIGHT wall and its floor junction clear for a separately rendered passageway. NO new doorways or arch sprites, NO characters, monsters, loot, hands, UI, text or labels. Preserve all OTHER ELEVEN panels, their order, equal grid boundaries, original visual content and overall square dimensions. Output the COMPLETE opaque atlas, not a crop. Original realistic textured environmental art consistent with the current image."
+    },
+    {
+      "file": "floor_4.png",
+      "width": 1254,
+      "height": 1254,
+      "bytes": 2529856,
+      "sha256": "53a748214fa2d81adaa7bbf30c823db4d3c09f5898b3069d248cd367d0c5c6f7",
+      "git_sha": "f26e89acb7398bf29ebb2f27c6aa607bd1de745d",
+      "floor": 4,
+      "columns": 2,
+      "rows": 6,
+      "source_type": "project-generated original",
+      "prompt": "Create one ORIGINAL game environment art atlas, a perfectly SQUARE large PNG contact sheet. STRICT LAYOUT: exactly TWO equal columns and SIX equal rows, TWELVE separate rectangular landscape scenes. Each tile is 3:1 wide, all tiles aligned to the exact equal grid edge-to-edge, NO margins, NO gutters, NO borders, NO captions, NO panel numbers. This is a 2D first-person dark fantasy dungeon game background atlas, original realistic physically based environment concept art with rich weathered materials, convincing lighting and depth. Every tile is a DIFFERENT chamber. The viewer stands inside each chamber at human eye height, wide horizontal view, floor visible in lower third, environment in upper two thirds. Keep the central lower/middle standing area clear for a separately rendered enemy; place unique room landmarks to the sides and rear, still large/readable. No adventurer, no first-person hands, no monsters, no living people, no bosses, no weapons floating in foreground, no HUD/UI, no actual written words/letters/logos/watermark. Inscriptions and documents are atmospheric illegible marks, never readable text. Do not add treasure chests, gold piles, potion bottles or collectible gear unless the description explicitly calls for a decorative object, because loot will be drawn separately. Use sealed/dark walls at the far center and peripheral blank stone wall zones for separately drawn actual passageway overlays; do not invent extra open exits. Any described portal is CLOSED/inactive; any described guardian is omitted but keep its architecture. All twelve scenes should remain clearly visible and distinct, not blended across tile boundaries. No copying franchise art or named artist style. FLOOR ATMOSPHERE: Starless Vault below the forge; black marble, indigo darkness, silver chains, cold violet-blue light, ancient royal prison. EXACT TILE ORDER, row by row left to right then next row. Each entry gives its landmark and exact atmosphere to depict (do not print these titles): Row 1, LEFT: The Silent Causeway. The portal opens on a bridge of black stone. Far above, forge chains vanish into the ceiling. Below, an empty shaft swallows your lantern light before it reaches the bottom. | Row 1, RIGHT: The Unlit Orrery. Bronze rings turn around a missing star. Their movement follows no sky; each ring is tethered to a chain running toward the sealed royal gate. | Row 2, LEFT: The Hall of Unspoken Names. Guardians' names have been scraped from black marble tablets. You can read only their shared oath: the king must remain below. | Row 2, RIGHT: The Silver Anchorage. Enormous chains are bolted into the bedrock. One has snapped, leaving its broken end hovering over the floor as though gravity has forgotten it. | Row 3, LEFT: The Empty Watch. Stone sentry posts face a blank wall. A dark stain travels across it against the direction of your lantern's shadow. | Row 3, RIGHT: The Royal Deposition. A sealed testimony lies beneath cracked glass. It describes a willing sacrifice, followed by a voice pleading for the chains to be removed. | Row 4, LEFT: The Mirror Prison. Covered mirrors line narrow cells. One cloth has slipped; its glass reflects a crowned figure where you should be standing. | Row 4, RIGHT: The Severed Conduit. A pipe from the forge ends in a broken rune circle. Sparks drift into darkness and disappear without touching the floor. | Row 5, LEFT: The Last Vigil. A knight's bedroll lies beside a stone cup. Dust covers everything except the words cut into the wall: remember who he was, resist what he became. | Row 5, RIGHT: The Chamber of Echoes. A voice welcomes you by name from behind the stone. It sounds weary and kind, but its words arrive before your footsteps make an echo. | Row 6, LEFT: The Fallen Constellation. Silver studs form a royal crown across the ceiling. Their light dims one by one as something far below draws a slow breath. | Row 6, RIGHT: The Oathbound Gate. Silver chains converge on a gate bearing the royal crest. The Void Knight stands motionless before it, sword drawn across a vow to let no living soul reach the hollow throne.",
+      "revision": "Image-tool pass removed the painted guardian/king from the final tile so combat can add and remove its own foe.",
+      "edit_prompt": "Edit ONLY the BOTTOM RIGHT tile (row6,column2) of this 2column6row room-background atlas. Remove the standing armored Void Knight, its sword and cloak completely. Reconstruct the empty stone floor and silver chains behind it. Keep the royal-crest sealed gate, sconces, architectural lighting, silver chains and the entire rest of this room. Keep ALL OTHER ELEVEN panels, their exact positions, colors, sizes, content, and the overall square dimensions unchanged. No creatures or character should stand in the last panel. The mirror reflection in row4,left is intentional and must remain. Preserve realistic textures. No extra text. Output the same complete opaque twelve-panel atlas.",
+      "panels": [
+        {
+          "id": "floor_4_room_00",
+          "cell": 0,
+          "name": "The Silent Causeway",
+          "description": "The portal opens on a bridge of black stone. Far above, forge chains vanish into the ceiling. Below, an empty shaft swallows your lantern light before it reaches the bottom.",
+          "landmarks": [
+            "black-stone bridge",
+            "ceiling chains",
+            "lightless shaft"
+          ],
+          "front_passage": null
+        },
+        {
+          "id": "floor_4_room_01",
+          "cell": 1,
+          "name": "The Unlit Orrery",
+          "description": "Bronze rings turn around a missing star. Their movement follows no sky; each ring is tethered to a chain running toward the sealed royal gate.",
+          "landmarks": [
+            "bronze orrery rings",
+            "missing central star",
+            "chain tethers"
+          ],
+          "front_passage": [
+            0.7,
+            0.76,
+            0.1,
+            0.48
+          ]
+        },
+        {
+          "id": "floor_4_room_02",
+          "cell": 2,
+          "name": "The Hall of Unspoken Names",
+          "description": "Guardians' names have been scraped from black marble tablets. You can read only their shared oath: the king must remain below.",
+          "landmarks": [
+            "black marble tablets",
+            "scraped inscriptions"
+          ],
+          "front_passage": [
+            0.82,
+            0.8,
+            0.12,
+            0.54
+          ]
+        },
+        {
+          "id": "floor_4_room_03",
+          "cell": 3,
+          "name": "The Silver Anchorage",
+          "description": "Enormous chains are bolted into the bedrock. One has snapped, leaving its broken end hovering over the floor as though gravity has forgotten it.",
+          "landmarks": [
+            "bedrock chain anchors",
+            "hovering broken chain end"
+          ],
+          "front_passage": [
+            0.9,
+            0.8,
+            0.1,
+            0.49
+          ]
+        },
+        {
+          "id": "floor_4_room_04",
+          "cell": 4,
+          "name": "The Empty Watch",
+          "description": "Stone sentry posts face a blank wall. A dark stain travels across it against the direction of your lantern's shadow.",
+          "landmarks": [
+            "stone sentry posts",
+            "blank wall",
+            "dark stain"
+          ],
+          "front_passage": [
+            0.7,
+            0.8,
+            0.1,
+            0.5
+          ]
+        },
+        {
+          "id": "floor_4_room_05",
+          "cell": 5,
+          "name": "The Royal Deposition",
+          "description": "A sealed testimony lies beneath cracked glass. It describes a willing sacrifice, followed by a voice pleading for the chains to be removed.",
+          "landmarks": [
+            "sealed testimony",
+            "cracked glass"
+          ],
+          "front_passage": [
+            0.92,
+            0.8,
+            0.08,
+            0.5
+          ]
+        },
+        {
+          "id": "floor_4_room_06",
+          "cell": 6,
+          "name": "The Mirror Prison",
+          "description": "Covered mirrors line narrow cells. One cloth has slipped; its glass reflects a crowned figure where you should be standing.",
+          "landmarks": [
+            "narrow cells",
+            "covered mirrors",
+            "slipped cloth"
+          ],
+          "front_passage": [
+            0.8,
+            0.65,
+            0.08,
+            0.4
+          ]
+        },
+        {
+          "id": "floor_4_room_07",
+          "cell": 7,
+          "name": "The Severed Conduit",
+          "description": "A pipe from the forge ends in a broken rune circle. Sparks drift into darkness and disappear without touching the floor.",
+          "landmarks": [
+            "forge pipe",
+            "broken rune circle",
+            "sparks"
+          ],
+          "front_passage": [
+            0.7,
+            0.64,
+            0.1,
+            0.49
+          ]
+        },
+        {
+          "id": "floor_4_room_08",
+          "cell": 8,
+          "name": "The Last Vigil",
+          "description": "A knight's bedroll lies beside a stone cup. Dust covers everything except the words cut into the wall: remember who he was, resist what he became.",
+          "landmarks": [
+            "dusty bedroll",
+            "stone cup",
+            "wall inscription"
+          ],
+          "front_passage": [
+            0.83,
+            0.82,
+            0.12,
+            0.52
+          ]
+        },
+        {
+          "id": "floor_4_room_09",
+          "cell": 9,
+          "name": "The Chamber of Echoes",
+          "description": "A voice welcomes you by name from behind the stone. It sounds weary and kind, but its words arrive before your footsteps make an echo.",
+          "landmarks": [
+            "echoing stone chamber",
+            "deep wall recesses"
+          ],
+          "front_passage": [
+            0.7,
+            0.8,
+            0.11,
+            0.5
+          ]
+        },
+        {
+          "id": "floor_4_room_10",
+          "cell": 10,
+          "name": "The Fallen Constellation",
+          "description": "Silver studs form a royal crown across the ceiling. Their light dims one by one as something far below draws a slow breath.",
+          "landmarks": [
+            "silver ceiling studs",
+            "royal crown constellation"
+          ],
+          "front_passage": [
+            0.5,
+            0.97,
+            0.12,
+            0.35
+          ]
+        },
+        {
+          "id": "floor_4_room_11",
+          "cell": 11,
+          "name": "The Oathbound Gate",
+          "description": "Silver chains converge on a gate bearing the royal crest. The Void Knight stands motionless before it, sword drawn across a vow to let no living soul reach the hollow throne.",
+          "landmarks": [
+            "converging silver chains",
+            "royal-crest gate"
+          ],
+          "front_passage": null
+        }
+      ]
+    },
+    {
+      "file": "floor_5.png",
+      "width": 1254,
+      "height": 1254,
+      "bytes": 2800657,
+      "sha256": "c61fd00c83d033bc967cdfd93aa1ead799606f1806e12b80555ead130c6b7b93",
+      "git_sha": "a017a30e80a8c76b63bade90e7c63e4ebdff8310",
+      "floor": 5,
+      "columns": 2,
+      "rows": 6,
+      "source_type": "project-generated original",
+      "prompt": "Create one ORIGINAL game environment art atlas, a perfectly SQUARE large PNG contact sheet. STRICT LAYOUT: exactly TWO equal columns and SIX equal rows, TWELVE separate rectangular landscape scenes. Each tile is 3:1 wide, all tiles aligned to the exact equal grid edge-to-edge, NO margins, NO gutters, NO borders, NO captions, NO panel numbers. This is a 2D first-person dark fantasy dungeon game background atlas, original realistic physically based environment concept art with rich weathered materials, convincing lighting and depth. Every tile is a DIFFERENT chamber. The viewer stands inside each chamber at human eye height, wide horizontal view, floor visible in lower third, environment in upper two thirds. Keep the central lower/middle standing area clear for a separately rendered enemy; place unique room landmarks to the sides and rear, still large/readable. No adventurer, no first-person hands, no monsters, no living people, no bosses, no weapons floating in foreground, no HUD/UI, no actual written words/letters/logos/watermark. Inscriptions and documents are atmospheric illegible marks, never readable text. Do not add treasure chests, gold piles, potion bottles or collectible gear unless the description explicitly calls for a decorative object, because loot will be drawn separately. Use sealed/dark walls at the far center and peripheral blank stone wall zones for separately drawn actual passageway overlays; do not invent extra open exits. Any described portal is CLOSED/inactive; any described guardian is omitted but keep its architecture. All twelve scenes should remain clearly visible and distinct, not blended across tile boundaries. No copying franchise art or named artist style. FLOOR ATMOSPHERE: Thalinor's Heart at the oldest foundations; rose-black bedrock, dark water, worn royal carvings, silver restraints, dim gold and wine-red light. EXACT TILE ORDER, row by row left to right then next row. Each entry gives its landmark and exact atmosphere to depict (do not print these titles): Row 1, LEFT: The Foundation Rift. Mira's portal opens inside the oldest stones of Thalinor. The royal crest has been worn smooth by centuries of dark water. A heartbeat shakes the floor, although nothing living waits here. | Row 1, RIGHT: The First Foundation. The earliest builders' tools lie sealed within transparent stone. Their unfinished inscription asks the city's heart to protect all who will live above. | Row 2, LEFT: The Coronation Grave. A royal procession is carved around an empty sarcophagus. The king's likeness has no face, and every carved witness turns away from him. | Row 2, RIGHT: The Chamber of the Offering. A stone bowl rests on an altar beneath the royal seal. A single dried handprint marks where the king offered his heart to halt the disaster. | Row 3, LEFT: The Blackwater Court. Dark water covers the floor of an abandoned audience hall. Ripples gather toward an empty dais, as if unseen courtiers still kneel there. | Row 3, RIGHT: The Crown's Shadow. A broken crown is painted above a doorway. Its shadow falls across your path even when your lantern points in the opposite direction. | Row 4, LEFT: The City's Memory. Small belongings fill shelves cut into the rock: a child's cup, a mason's cord, a gardener's knife. These are the lives the king meant to save. | Row 4, RIGHT: The Last Chain. The final intact restraint crosses the chamber at chest height. Its links strain with each heartbeat from the throne, shedding silver dust. | Row 5, LEFT: The Nameless Choir. Cracks in the walls carry hundreds of thin voices. For a moment they speak together: he gave his heart, but it was never enough. | Row 5, RIGHT: The Sealed Dawn. A golden mosaic shows sunlight falling over Thalinor before its ruin. Beneath it, a narrow passage exhales cold air from the royal chamber. | Row 6, LEFT: The Heartless Antechamber. The heartbeat grows loud enough to drown your breathing. An inscription beside the throne door names the man the king once was, before the stone beneath it turns black. | Row 6, RIGHT: The Hollow Throne. The city's foundations curve around a throne carved from its own bedrock. The Hollow King rises beneath a fractured crown, an open darkness where his heart should be. All the catacombs' chains lead here.",
+      "revision": "Image-tool pass removed the painted guardian/king from the final tile so combat can add and remove its own foe.",
+      "edit_prompt": "Edit ONLY the BOTTOM RIGHT tile (row6,column2) of this 2column6row room-background atlas. Make the bedrock throne completely EMPTY: remove the humanoid/cloaked/armored king shape, the dangling sleeves and its crown above the seat. Reconstruct an empty weathered carved stone throne seat and stone backrest; keep throne armrests, architectural royal relief, curving bedrock foundations, converging silver chains, floor and lighting. No creature, humanoid, cloak or floating crown should occupy the throne. Keep ALL OTHER ELEVEN panels, their exact positions, colors, sizes, content, and overall square dimensions unchanged. Preserve realistic textures. Output the same complete opaque twelve-panel atlas.",
+      "panels": [
+        {
+          "id": "floor_5_room_00",
+          "cell": 0,
+          "name": "The Foundation Rift",
+          "description": "Mira's portal opens inside the oldest stones of Thalinor. The royal crest has been worn smooth by centuries of dark water. A heartbeat shakes the floor, although nothing living waits here.",
+          "landmarks": [
+            "ancient foundations",
+            "worn royal crest",
+            "dark water"
+          ],
+          "front_passage": [
+            0.8,
+            0.8,
+            0.1,
+            0.5
+          ]
+        },
+        {
+          "id": "floor_5_room_01",
+          "cell": 1,
+          "name": "The First Foundation",
+          "description": "The earliest builders' tools lie sealed within transparent stone. Their unfinished inscription asks the city's heart to protect all who will live above.",
+          "landmarks": [
+            "builders' tools in transparent stone",
+            "unfinished inscription"
+          ],
+          "front_passage": [
+            0.16,
+            0.8,
+            0.085,
+            0.48
+          ]
+        },
+        {
+          "id": "floor_5_room_02",
+          "cell": 2,
+          "name": "The Coronation Grave",
+          "description": "A royal procession is carved around an empty sarcophagus. The king's likeness has no face, and every carved witness turns away from him.",
+          "landmarks": [
+            "empty sarcophagus",
+            "royal procession relief",
+            "faceless king carving"
+          ],
+          "front_passage": [
+            0.94,
+            0.82,
+            0.075,
+            0.48
+          ]
+        },
+        {
+          "id": "floor_5_room_03",
+          "cell": 3,
+          "name": "The Chamber of the Offering",
+          "description": "A stone bowl rests on an altar beneath the royal seal. A single dried handprint marks where the king offered his heart to halt the disaster.",
+          "landmarks": [
+            "stone offering bowl",
+            "altar",
+            "royal seal",
+            "dried handprint"
+          ],
+          "front_passage": [
+            0.15,
+            0.83,
+            0.1,
+            0.5
+          ]
+        },
+        {
+          "id": "floor_5_room_04",
+          "cell": 4,
+          "name": "The Blackwater Court",
+          "description": "Dark water covers the floor of an abandoned audience hall. Ripples gather toward an empty dais, as if unseen courtiers still kneel there.",
+          "landmarks": [
+            "flooded audience hall",
+            "dark ripples",
+            "empty dais"
+          ],
+          "front_passage": [
+            0.5,
+            0.41,
+            0.12,
+            0.35
+          ]
+        },
+        {
+          "id": "floor_5_room_05",
+          "cell": 5,
+          "name": "The Crown's Shadow",
+          "description": "A broken crown is painted above a doorway. Its shadow falls across your path even when your lantern points in the opposite direction.",
+          "landmarks": [
+            "painted broken crown",
+            "doorway",
+            "unnatural shadow"
+          ],
+          "front_passage": [
+            0.17,
+            0.82,
+            0.1,
+            0.5
+          ]
+        },
+        {
+          "id": "floor_5_room_06",
+          "cell": 6,
+          "name": "The City's Memory",
+          "description": "Small belongings fill shelves cut into the rock: a child's cup, a mason's cord, a gardener's knife. These are the lives the king meant to save.",
+          "landmarks": [
+            "rock shelves",
+            "child's cup",
+            "mason's cord",
+            "gardener's knife"
+          ],
+          "front_passage": [
+            0.5,
+            0.82,
+            0.12,
+            0.5
+          ]
+        },
+        {
+          "id": "floor_5_room_07",
+          "cell": 7,
+          "name": "The Last Chain",
+          "description": "The final intact restraint crosses the chamber at chest height. Its links strain with each heartbeat from the throne, shedding silver dust.",
+          "landmarks": [
+            "chest-high silver restraint",
+            "silver dust"
+          ],
+          "front_passage": [
+            0.94,
+            0.82,
+            0.07,
+            0.43
+          ]
+        },
+        {
+          "id": "floor_5_room_08",
+          "cell": 8,
+          "name": "The Nameless Choir",
+          "description": "Cracks in the walls carry hundreds of thin voices. For a moment they speak together: he gave his heart, but it was never enough.",
+          "landmarks": [
+            "many wall cracks"
+          ],
+          "front_passage": [
+            0.73,
+            0.82,
+            0.1,
+            0.5
+          ]
+        },
+        {
+          "id": "floor_5_room_09",
+          "cell": 9,
+          "name": "The Sealed Dawn",
+          "description": "A golden mosaic shows sunlight falling over Thalinor before its ruin. Beneath it, a narrow passage exhales cold air from the royal chamber.",
+          "landmarks": [
+            "golden sunlight mosaic",
+            "narrow royal passage"
+          ],
+          "front_passage": [
+            0.5,
+            0.96,
+            0.08,
+            0.22
+          ]
+        },
+        {
+          "id": "floor_5_room_10",
+          "cell": 10,
+          "name": "The Heartless Antechamber",
+          "description": "The heartbeat grows loud enough to drown your breathing. An inscription beside the throne door names the man the king once was, before the stone beneath it turns black.",
+          "landmarks": [
+            "throne door",
+            "inscription",
+            "blackening stone"
+          ],
+          "front_passage": [
+            0.84,
+            0.83,
+            0.09,
+            0.5
+          ]
+        },
+        {
+          "id": "floor_5_room_11",
+          "cell": 11,
+          "name": "The Hollow Throne",
+          "description": "The city's foundations curve around a throne carved from its own bedrock. The Hollow King rises beneath a fractured crown, an open darkness where his heart should be. All the catacombs' chains lead here.",
+          "landmarks": [
+            "bedrock throne",
+            "curving foundations",
+            "converging chains"
+          ],
+          "front_passage": null
+        }
+      ]
+    }
+  ],
+  "doorways": {
+    "file": "doorways.png",
+    "width": 1024,
+    "height": 1536,
+    "bytes": 2959515,
+    "sha256": "d1f5ac8db6095251451ea8b280e578954a7671da484970e624b2642d6d99bcd1",
+    "git_sha": "6d81dc769daeca316edb6f65b76b066e913e50af",
+    "columns": 3,
+    "rows": 5,
+    "source_type": "project-generated original",
+    "prompt": "NEW ORIGINAL GAME-ART ASSET: a PORTRAIT 1024x1536 transparent PNG atlas, exactly THREE equal columns and FIVE equal rows, fifteen separate architectural doorway cutouts. No gutters, captions, borders, text, labels or checkerboard. True transparent ALPHA everywhere outside each doorway frame, including between cells. Every doorway entirely fits its own cell with 8% transparent padding and no overlap. These are realistic textured OPEN PASSAGEWAYS for compositing into first-person dungeon room paintings, not flat icons or UI panels. Each aperture has an OPAQUE near-black tunnel interior with subtle realistic depth and a few worn threshold stones; only the outside beyond each stone/iron/root frame is transparent. Tall arch or lintel, convincing thick weathered jambs, dark recess, soft contact shadows limited closely to frame, rich physically plausible detailed materials, no broad rectangular wall or background plate. No closed door leaf, no knobs, no writing, no people, no creatures, no foreground hands/weapons. In EVERY row: LEFT COLUMN is a passage in the left wall viewed obliquely from room center (left foreground jamb larger, far/right jamb recedes), CENTER COLUMN is a straight-on arch on a distant rear wall, RIGHT COLUMN is a right-wall passage viewed obliquely (mirror of the left view). The standing floor edge aligns at each cell bottom, eye-level camera. Exactly one complete opening in each cell. Five ROWS correspond to these lighting/material themes in order: ROW1 pale gray cold limestone royal catacombs, crumbling carved stone, faint blue moonlight and gentle warm lantern rim. ROW2 buried root grove, dark damp mossy green stone, thick pale twisting roots round the jambs, tiny amber sap highlights. ROW3 Ashen Forge, riveted soot-black iron reinforcement over rough dark stone, muted copper fittings and restrained orange furnace rim glow. ROW4 Starless Vault, dark indigo black marble, restrained silver reinforcement and cold violet-blue reflected light, elegant severe ancient prison architecture. ROW5 royal foundations, weathered rose-black bedrock, subtle tarnished gold royal relief motifs, warm dim reddish reflections and dark damp stone. Make the stone frames blend naturally into corresponding realistic environment paintings, irregular softened outer silhouettes, no bright uniform outline. Original generic dark fantasy designs, no franchise imagery or outside artist style.",
+    "layout": "Rows: floors 1–5. Columns: left-wall passage, front passage, right-wall passage. Transparent exterior and dark tunnel interiors; only actual known exits are drawn."
+  },
+  "packaging": "All six room/passage PNG assets and this provenance record are embedded byte-for-byte in the desktop executable and verified. The release also includes a readable copy as legal/room-artwork-sources.json; exact file hashes appear in build-manifest.json."
+}
