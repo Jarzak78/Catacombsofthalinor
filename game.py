@@ -5,6 +5,7 @@ from actions import Action
 from battle_flavor import hit_description, miss_description
 from campaign import FLOORS, preferred_item_id, sanctuary_dialogue, shop_items, stock
 from credits import credits_lines
+from combat_events import CombatEventLog, resolved_visual_event
 from equipment import DEFAULT_ARMOR, DEFAULT_WEAPONS, EQUIPMENT, make_equipment, resolve_equipment_id
 from lore_notes import LoreNote
 from loot_flavor import (
@@ -105,6 +106,29 @@ class Game:
         self.last_long_rest_end = -960.0
         self.won = False
         self.quit_requested = False
+        self._visual_events = CombatEventLog()
+
+    @property
+    def visual_sequence(self) -> int:
+        return self._visual_events.sequence
+
+    def visual_events_since(self, after_id: int = 0) -> list[dict]:
+        """Read resolved presentation events without consuming them or rolling."""
+        return self._visual_events.events_since(after_id)
+
+    def _record_visual(self, kind: str, enemy: Enemy | None, *, source: str = "player",
+                       result: AttackResult | None = None, damage: int = 0,
+                       saved: bool | None = None) -> None:
+        target = self.player if source == "enemy" or kind in ("armor", "shield") else enemy
+        if target is None:
+            return
+        self._visual_events.append(resolved_visual_event(
+            source=source, kind=kind, floor=self.floor, position=self.position,
+            enemy={"name": enemy.name, "boss": enemy.boss} if enemy else None,
+            target_hp=target.hp, target_max_hp=target.max_hp,
+            player_hp=self.player.hp, enemy_hp=enemy.hp if enemy else 0,
+            enemy_max_hp=enemy.max_hp if enemy else 0,
+            result=result, damage=damage, saved=saved))
 
     @property
     def room(self) -> Room:
@@ -525,6 +549,7 @@ class Game:
                              self.player.weapon_dice, self.player.damage_bonus,
                              advantage=advantage,
                              extra_damage_dice=(self.player.sneak_attack_dice_count, 6) if sneak_eligible else None)
+        self._record_visual("weapon", enemy, result=result)
         sneak = result.extra_damage
         if result.hit and sneak_eligible:
             self.sneak_attack_used = True
@@ -635,6 +660,7 @@ class Game:
         if mitigated:
             self.uncanny_dodge_available = False
             result = replace(result, damage=result.damage // 2)
+        self._record_visual("weapon", enemy, source="enemy", result=result)
         lines = [self.attack_text(enemy.name, "you", result)]
         if mitigated:
             lines.append("Uncanny Dodge: you twist aside, halving the blow's damage (included above).")
@@ -913,15 +939,18 @@ class Game:
                 self.free_examine_available = False
                 self.reveal_opening()
         if spell == "armor":
+            self._record_visual("armor", enemy)
             self.player.mage_armor_active = True
             return [f"Mage Armor shimmers around you. AC {self.player.armor_class}; lasts until your next long rest."]
         if spell == "shield":
+            self._record_visual("shield", enemy)
             self.shield_active = True
             return [f"A luminous Shield unfolds. AC {self.player.armor_class + 5} against the next enemy strike.", self.turn_status()]
         if spell in ("firebolt", "frost"):
             self.hidden = False
             dice = (2 if self.player.level >= 5 else 1, 10) if spell == "firebolt" else (3, 8)
             result = roll_attack(self.rng, self.player.spell_attack_bonus, enemy.armor_class, dice, 0)
+            self._record_visual(spell, enemy, result=result)
             label = "Fire Bolt" if spell == "firebolt" else "Frost Lance"
             if result.hit:
                 strength = ("grazes" if result.damage <= 5 else "strikes" if result.damage <= 10
@@ -947,6 +976,7 @@ class Game:
         elif spell == "missile":
             self.hidden = False
             damage = roll_dice(self.rng, 3, 4) + 3
+            self._record_visual("missile", enemy, damage=damage)
             lines = [f"Three Magic Missiles strike {enemy.name} for {format_damage_pool((3, 4), 3, damage)} force damage!"]
         else:
             self.hidden = False
@@ -957,6 +987,7 @@ class Game:
             saved = total >= self.player.spell_save_dc
             if saved:
                 damage //= 2
+            self._record_visual("fireball", enemy, damage=damage, saved=saved)
             lines = [f"Fireball: {enemy.name} rolls Dexterity {total} vs DC {self.player.spell_save_dc}: "
                      f"{'success, half damage' if saved else 'failure'}. Flames deal "
                      f"{format_damage_pool((8, 6), 0, damage, original_total=original_damage)} damage!"]
@@ -1344,6 +1375,7 @@ class Game:
         self.hidden = False
         self.player.ember_stones -= 1
         damage = roll_dice(self.rng, 3, 6)
+        self._record_visual("ember", enemy, damage=damage)
         enemy.take_damage(damage)
         lines = [f"Your Ember stone bursts for {format_damage_pool((3, 6), 0, damage)} magic damage!"]
         if not enemy.is_alive:
@@ -1372,6 +1404,8 @@ class Game:
                             note_collected=room.note_collected)
             rooms.append(data)
         return {"floor": self.floor, "total_floors": self.total_floors,
+                "visual_sequence": self.visual_sequence,
+                "visual_events": self.visual_events_since(),
                 "theme": self.dungeon.theme.name,
                 "story": {"arrival": self.dungeon.lore.arrival,
                           "revelation": self.dungeon.lore.revelation if self.floor_cleared else None},

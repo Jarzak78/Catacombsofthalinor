@@ -183,3 +183,13 @@ source record does not guarantee uniqueness, copyrightability, exclusive
 ownership, or comprehensive legal clearance. Existing SRD permissions and
 software notices continue to apply independently. The raster loader adds
 no third-party runtime library or new native dependency.
+
+### Combat poses and visual effects
+
+The combat poses and effects in `combat_animation.py`, `dungeon_view.py`,
+and `sprite_art.py` were developed for this project with AI assistance.
+They transform the existing generated artwork and draw weapon trails,
+spell projectiles, impacts, and wards with standard Tk Canvas primitives.
+No outside animation, image, audio, font, or code pack was imported, and
+no new third-party runtime dependency was added. The atlas provenance and
+all existing SRD and runtime notices remain applicable and unchanged.

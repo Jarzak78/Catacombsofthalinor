@@ -21,44 +21,77 @@ _PALETTES = {
 }
 
 
-def draw_dungeon_view(canvas, width: float, height: float, view: dict) -> None:
+def draw_dungeon_view(canvas, width: float, height: float, view: dict, *, animation=None) -> None:
     """Draw a scalable first-person room using standard Tk Canvas primitives.
 
     All items carry VIEW_TAG, with additional semantic tags for smoke checks.
     Callers may redraw or resize freely without advancing an adventure.
     """
     canvas.delete(VIEW_TAG)
+    canvas.delete("combat-fx")
     if width <= 0 or height <= 0:
         return
     view = view or {}
+    animation = animation or {}
+    if view.get("scene") == "shop":
+        animation = {}
     floor = view.get("floor", 1)
     if type(floor) is not int or not 1 <= floor <= 5:
         floor = 1
     ceiling, wall, side, ground, seam, edge, accent = _PALETTES[floor]
     sx, sy = width / 1000, height / 400
 
-    def points(values):
-        return [v * (sx if i % 2 == 0 else sy) for i, v in enumerate(values)]
+    def shape_pose(tag):
+        if tag in ("view-hands", "view-shield"):
+            scale = .65 * animation.get("hands_scale", 1)
+            return (500, 403, scale, scale, animation.get("hands_angle", 0),
+                    animation.get("hands_dx", 0), animation.get("hands_dy", 0))
+        if tag == "view-enemy":
+            return (500, 307, animation.get("enemy_scale_x", 1),
+                    animation.get("enemy_scale_y", 1), animation.get("enemy_angle", 0),
+                    animation.get("enemy_dx", 0), animation.get("enemy_dy", 0))
+        return (0, 0, 1, 1, 0, 0, 0)
+
+    def points(values, tag="view-wall"):
+        px, py, scale_x, scale_y, angle, dx, dy = shape_pose(tag)
+        cosine, sine = cos(angle * pi / 180), sin(angle * pi / 180)
+        output = []
+        for i in range(0, len(values), 2):
+            x, y = (values[i] - px) * scale_x, (values[i + 1] - py) * scale_y
+            output.extend(((px + x * cosine - y * sine + dx) * sx,
+                           (py + x * sine + y * cosine + dy) * sy))
+        return output
 
     def poly(values, fill, outline="", weight=1, tag="view-wall"):
-        canvas.create_polygon(*points(values), fill=fill, outline=outline,
+        canvas.create_polygon(*points(values, tag), fill=fill, outline=outline,
                               width=max(1, weight * min(sx, sy)),
                               tags=((VIEW_TAG, tag, "view-hands") if tag == "view-shield" else (VIEW_TAG, tag)))
 
     def rect(x1, y1, x2, y2, fill, outline="", weight=1, tag="view-wall"):
-        canvas.create_rectangle(x1 * sx, y1 * sy, x2 * sx, y2 * sy,
+        if shape_pose(tag)[4]:
+            poly((x1, y1, x2, y1, x2, y2, x1, y2), fill, outline, weight, tag)
+            return
+        canvas.create_rectangle(*points((x1, y1, x2, y2), tag),
                                 fill=fill, outline=outline,
                                 width=max(1, weight * min(sx, sy)),
                                 tags=((VIEW_TAG, tag, "view-hands") if tag == "view-shield" else (VIEW_TAG, tag)))
 
     def oval(x1, y1, x2, y2, fill, outline="", weight=1, tag="view-wall"):
-        canvas.create_oval(x1 * sx, y1 * sy, x2 * sx, y2 * sy,
+        if shape_pose(tag)[4]:
+            values = []
+            for i in range(24):
+                angle = i * pi / 12
+                values.extend(((x1 + x2) / 2 + (x2 - x1) / 2 * cos(angle),
+                               (y1 + y2) / 2 + (y2 - y1) / 2 * sin(angle)))
+            poly(values, fill, outline, weight, tag)
+            return
+        canvas.create_oval(*points((x1, y1, x2, y2), tag),
                            fill=fill, outline=outline,
                            width=max(1, weight * min(sx, sy)),
                            tags=((VIEW_TAG, tag, "view-hands") if tag == "view-shield" else (VIEW_TAG, tag)))
 
     def line(values, fill, weight=1, tag="view-wall"):
-        canvas.create_line(*points(values), fill=fill,
+        canvas.create_line(*points(values, tag), fill=fill,
                            width=max(1, weight * min(sx, sy)),
                            capstyle="round", joinstyle="round",
                            tags=((VIEW_TAG, tag, "view-hands") if tag == "view-shield" else (VIEW_TAG, tag)))
@@ -101,9 +134,17 @@ def draw_dungeon_view(canvas, width: float, height: float, view: dict) -> None:
         kind = str(enemy.get("archetype", "humanoid")).lower()
         name = str(enemy.get("name", "")).lower()
         boss = bool(enemy.get("boss"))
-        if draw_sprite(canvas, enemy_sprite_key(enemy, floor), 500 * sx, 307 * sy,
+        if animation.get("enemy_opacity", 1) <= 0:
+            return
+        if draw_sprite(canvas, enemy_sprite_key(enemy, floor),
+                       (500 + animation.get("enemy_dx", 0)) * sx,
+                       (307 + animation.get("enemy_dy", 0)) * sy,
                        (440 if boss else 385) * sx, (310 if boss else 270) * sy,
-                       anchor="s", tags=(VIEW_TAG, "view-enemy")):
+                       anchor="s", tags=(VIEW_TAG, "view-enemy"),
+                       angle=animation.get("enemy_angle", 0),
+                       opacity=animation.get("enemy_opacity", 1),
+                       stretch_x=animation.get("enemy_scale_x", 1),
+                       stretch_y=animation.get("enemy_scale_y", 1)):
             return
         armor = ("#8b9695", "#627c5b", "#9b7654", "#737eaa", "#9b6871")[floor - 1]
         shadow = "#111921"
@@ -225,9 +266,13 @@ def draw_dungeon_view(canvas, width: float, height: float, view: dict) -> None:
         sprite_key = hand_sprite_key(view)
         tags = (VIEW_TAG, "view-hands", "view-shield") if sprite_key == "sword_shield" else (VIEW_TAG, "view-hands")
         heavy = sprite_key in ("greatsword", "greataxe")
-        if draw_sprite(canvas, sprite_key, width * (.65 if heavy else .5), height + 3 * sy,
-                       width * (.67 if heavy else .97), height * (.88 if heavy else .96),
-                       anchor="s", tags=tags):
+        if draw_sprite(canvas, sprite_key,
+                       width * (.65 if heavy else .5) + animation.get("hands_dx", 0) * sx,
+                       height + (3 + animation.get("hands_dy", 0)) * sy,
+                       width * (.50 if heavy else .72), height * (.60 if heavy else .62),
+                       anchor="s", tags=tags, angle=animation.get("hands_angle", 0),
+                       stretch_x=animation.get("hands_scale", 1),
+                       stretch_y=animation.get("hands_scale", 1)):
             return
         glove = "#303b40" if not view.get("hidden") else "#1c292b"
         skin = "#af8d73"
@@ -432,9 +477,12 @@ def draw_dungeon_view(canvas, width: float, height: float, view: dict) -> None:
             foe(view["enemy"])
         hands(str(view.get("class_id", "fighter")))
 
-    # A constant frame avoids animation, randomness, or hidden game-state reads.
+    # The frame stays fixed while foreground art reacts to public combat events.
     rect(0, 0, 1000, 400, "", "#0a1119", 7, "view-frame")
     if view.get("hidden") and view.get("scene") != "shop":
         line((5, 395, 5, 5, 995, 5, 995, 395), "#314d43", 5, "view-frame")
     if view.get("dead"):
         rect(2, 2, 998, 398, "", "#833e45", 6, "view-frame")
+    if animation:
+        from combat_animation import draw_combat_effects
+        draw_combat_effects(canvas, width, height, animation)

@@ -1,7 +1,9 @@
 """Exercise original view geometry without creating a Tk root or a game."""
 
 import math
+from types import SimpleNamespace
 import unittest
+from unittest.mock import patch
 
 from dungeon_view import VIEW_TAG, draw_dungeon_view
 
@@ -151,6 +153,71 @@ class DungeonArtTests(unittest.TestCase):
                 draw_dungeon_view(canvas, width, height, room_view())
                 self.assertFalse(canvas.tagged(VIEW_TAG))
                 self.assertEqual(len(canvas.tagged("unrelated")), 1)
+
+    def test_idle_foreground_is_smaller_while_foe_art_keeps_its_original_size(self):
+        enemy = {"name": "Bone Sentry", "archetype": "skeleton", "boss": False}
+        for equipment, expected_box, expected_x in (({}, (720, 248), 500),
+                ({"weapon_id": "greataxe", "two_handed": True}, (500, 240), 650)):
+            with self.subTest(equipment=equipment), patch(
+                    "dungeon_view.draw_sprite", return_value=True) as sprite:
+                draw_dungeon_view(RecordingCanvas(), 1000, 400,
+                                  room_view(enemy=enemy, **equipment))
+                foe, hands = sprite.call_args_list
+                self.assertEqual(foe.args[2:6], (500, 307, 385, 270))
+                self.assertEqual(hands.args[2:6], (expected_x, 403, *expected_box))
+                self.assertEqual(hands.kwargs["anchor"], "s")
+
+    def test_vector_fallback_is_also_small_and_animates_without_moving_the_room(self):
+        enemy = {"name": "Bone Sentry", "archetype": "skeleton", "boss": False}
+        canvas = RecordingCanvas()
+        draw_dungeon_view(canvas, 1000, 400, room_view(enemy=enemy))
+        wall = [item["coordinates"] for item in canvas.tagged("view-wall")]
+        before = [item["coordinates"] for item in canvas.tagged("view-enemy")]
+        hands = canvas.tagged("view-hands")
+        ys = [y for item in hands for y in item["coordinates"][1::2]]
+        self.assertLess(max(ys) - min(ys), 150)
+        animation = {"enemy_dx": 25, "enemy_dy": 4, "enemy_angle": 12,
+                     "enemy_scale_x": .9, "enemy_scale_y": .8,
+                     "hands_angle": -12, "hands_dx": -20}
+        with patch.dict("sys.modules", {"combat_animation": SimpleNamespace(
+                draw_combat_effects=lambda *args: None)}):
+            draw_dungeon_view(canvas, 1000, 400, room_view(enemy=enemy), animation=animation)
+        self.assertEqual(wall, [item["coordinates"] for item in canvas.tagged("view-wall")])
+        self.assertNotEqual(before, [item["coordinates"] for item in canvas.tagged("view-enemy")])
+        self.assertTrue(all(math.isfinite(value) for item in canvas.items for value in item["coordinates"]))
+
+    def test_sprite_pose_uses_foe_feet_and_reduced_hand_grip_as_pivots(self):
+        animation = {"enemy_dx": 30, "enemy_dy": 5, "enemy_angle": 12,
+                     "enemy_scale_x": 1.1, "enemy_scale_y": .8, "enemy_opacity": .75,
+                     "hands_dx": -20, "hands_dy": -15, "hands_angle": 24, "hands_scale": 1.1}
+        with patch("dungeon_view.draw_sprite", return_value=True) as sprite, patch.dict(
+                "sys.modules", {"combat_animation": SimpleNamespace(draw_combat_effects=lambda *args: None)}):
+            draw_dungeon_view(RecordingCanvas(), 1000, 400, room_view(
+                enemy={"name": "Foe", "archetype": "humanoid"}), animation=animation)
+        foe, hands = sprite.call_args_list
+        self.assertEqual(foe.args[2:6], (530, 312, 385, 270))
+        self.assertEqual((foe.kwargs["angle"], foe.kwargs["stretch_x"],
+                          foe.kwargs["stretch_y"], foe.kwargs["opacity"]), (12, 1.1, .8, .75))
+        self.assertEqual(hands.args[2:6], (480, 388, 720, 248))
+        self.assertEqual((hands.kwargs["angle"], hands.kwargs["stretch_x"]), (24, 1.1))
+
+    def test_effects_are_replaced_and_cleared_on_idle_and_scene_changes(self):
+        canvas = RecordingCanvas()
+
+        def effect(canvas, width, height, animation):
+            canvas.create_line(1, 2, 3, 4, tags=("combat-fx",))
+
+        with patch.dict("sys.modules", {"combat_animation": SimpleNamespace(draw_combat_effects=effect)}):
+            for _ in range(3):
+                draw_dungeon_view(canvas, 650, 240, room_view(), animation={"pose": "dodge"})
+                self.assertEqual(len(canvas.tagged("combat-fx")), 1)
+            draw_dungeon_view(canvas, 650, 240, room_view())
+            self.assertFalse(canvas.tagged("combat-fx"))
+            draw_dungeon_view(canvas, 650, 240, room_view(scene="shop"), animation={"pose": "dodge"})
+            self.assertFalse(canvas.tagged("combat-fx"))
+            canvas.create_line(1, 2, 3, 4, tags=("combat-fx",))
+            draw_dungeon_view(canvas, 0, 240, room_view())
+            self.assertFalse(canvas.tagged("combat-fx"))
 
 
 if __name__ == "__main__":

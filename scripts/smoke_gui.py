@@ -8,6 +8,8 @@ from tempfile import TemporaryDirectory
 
 
 REQUIRED_CHECKS = frozenset({
+    "weapon_swing_reaction", "animation_gameplay_purity", "wizard_spell_effect",
+    "animated_defeat_cleanup", "animation_restart_cleanup",
     "realistic_hands", "realistic_enemies", "realistic_sanctuary",
     "first_person_view", "view_camera", "view_combat", "view_discovery", "view_sanctuary",
     "title_screen", "credits", "runtime_terms", "torch_flicker", "character_creation", "class_choice", "4d6_drop_lowest",

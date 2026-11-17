@@ -413,11 +413,28 @@ grip illustration. This is presentation art and does not change equipment
 statistics or grant extra attacks. Creature portraits represent their
 visible archetype; the five guardians each have their own artwork.
 
-`sprite_art.py` extracts atlas regions and smoothly scales transparent
-sprites using the standard library. It caches images for normal redraws,
+Hands and weapons sit lower and occupy roughly one third less height than
+the earlier view, leaving more space around the unchanged enemy artwork.
+Attacks animate a brief weapon swing or a spell projectile, frost shard,
+arcane missiles, or fire burst. Foes block close misses, dodge wider misses,
+brace against light hits, and flinch or stagger under stronger blows.
+Defeated foes collapse and fade before the safe room's props return.
+Critical hits have a distinct golden impact, while the reaction's strength
+still follows actual damage: a weak critical does not look like a heavy hit.
+Incoming attacks and protective spells also have brief visual feedback.
+
+Animations use resolved combat results and never roll extra dice, spend
+actions, or advance game time. New commands and camera turns interrupt an
+animation immediately. Leaving the room, entering the sanctuary, restarting,
+or closing the window cancels its timer and effects.
+
+`sprite_art.py` extracts atlas regions and smoothly scales, rotates, and
+fades transparent sprites using the standard library. It caches images for redraws,
 so the game needs no runtime image-library installation. `view_model.py`
 supplies detached, visibility-filtered data, while `dungeon_view.py` paints
-it. The terminal, minimap, and existing command controls remain available.
+it. `combat_animation.py` converts resolved events into presentation-only
+poses and original Canvas effects. The terminal, minimap, and existing
+command controls remain available.
 Source and generation records are in `assets/realistic/asset_sources.json`.
 The GUI executable embeds and verifies the artwork and provenance; the
 terminal executable keeps its text interface without loading these images.
@@ -702,7 +719,12 @@ spell slots, carried valuables, turn budgets,
 encounter scouting and initiative results, whether a foe is unaware,
 opening Hide and examination availability,
 visited room descriptions/exits/enemies/loot, portal status, and vendor
-stock with stable item ids. Unvisited room contents are hidden. Reading a
+stock with stable item ids. A bounded history of resolved `visual_events`
+and its monotonic `visual_sequence` support animations without parsing text.
+Record the sequence before an action, then read
+`game.visual_events_since(sequence)` afterward; informational commands do
+not replay attacks. Event reads are detached and do not consume history.
+Unvisited room contents are hidden. Reading a
 snapshot does not advance randomness or time; changing it cannot mutate
 the game. Coordinates identify rooms within the current floor. Text
 commands and buttons use the same `perform` path as future controller input.
@@ -721,8 +743,8 @@ screens, text gameplay, action buttons, and a minimap. Visited rooms show
 known foes, treasure, or notes; unexplored rooms use question marks, and
 only explored passages are drawn. Hidden room descriptions, enemies, and
 treasure remain hidden. In Mira's shop the map shows the
-sanctuary instead of dungeon rooms. Sprite-based gameplay, animations, and
-controller bindings can be added later without replacing combat rules.
+sanctuary instead of dungeon rooms. The first-person combat animations use
+the same engine results; richer controls can be added without replacing combat rules.
 Description colors make the log easier to scan: room descriptions are green,
 item descriptions light blue, Mira's dialogue lavender, combat messages red,
 and entered commands gold. The console interface also uses colors when

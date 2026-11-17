@@ -1,6 +1,7 @@
 """A small native desktop adapter for the existing dungeon engine."""
 
 import json
+from copy import deepcopy
 from pathlib import Path
 from time import monotonic
 import tkinter as tk
@@ -11,7 +12,8 @@ from character_creation import CLASS_NAMES, CLASS_SUMMARIES
 from credits import credits_text, notice_documents, runtime_terms_required, runtime_terms_text
 from entrance_art import TORCH_TAG, animate_torches, draw_entrance
 from dungeon_view import VIEW_TAG, draw_dungeon_view
-from view_model import first_person_data
+from view_model import first_person_data, foe_archetype
+from combat_animation import ANIMATION_MS, FX_TAG, animation_frame
 from presentation import TAG_COLORS, classify_message
 from ui_controller import DesktopSession, minimap_data
 
@@ -44,6 +46,13 @@ class DungeonWindow:
         self.view_facing = "north"
         self._view_location = None
         self._view_game = None
+        self._attack_after_id = None
+        self._attack_queue = []
+        self._attack_event = None
+        self._attack_frame = None
+        self._attack_context = None
+        self._attack_token = 0
+        self._attack_step = 0
         root.title("Catacombs of Thalinor")
         root.geometry("1180x820")
         root.minsize(960, 740)
@@ -93,6 +102,8 @@ class DungeonWindow:
 
     def show_screen(self, scene: str) -> None:
         self._stop_title_animation()
+        if scene != "dungeon":
+            self._stop_attack_animation()
         self.screen = scene
         self.frames[scene].tkraise()
         if scene == "title":
@@ -106,6 +117,7 @@ class DungeonWindow:
     def _on_destroy(self, event) -> None:
         if event.widget is self.root:
             self._stop_title_animation()
+            self._stop_attack_animation()
 
     def _animate_title_torches(self) -> None:
         self._torch_after_id = None
@@ -477,6 +489,9 @@ class DungeonWindow:
         raw = raw.strip()
         if not raw:
             return
+        self._stop_attack_animation()
+        game = self.session.game
+        sequence = game.visual_sequence
         if command is None:
             self.command_var.set("")
         self.history.append(raw)
@@ -484,6 +499,8 @@ class DungeonWindow:
         self.append_messages(["> " + raw], "command")
         self.append_messages(self.session.submit_command(raw))
         self.refresh_dungeon()
+        if self.session.game is game:
+            self._play_attack_events(game.visual_events_since(sequence))
         self.command_entry.focus_set()
 
     def recall_command(self, delta: int) -> str:
@@ -533,6 +550,10 @@ class DungeonWindow:
     def refresh_view(self, state: dict) -> None:
         position = tuple(state.get("position", ()))
         location = (state.get("floor"), state.get("scene"), position)
+        context = (id(self.session.game), *location)
+        if (getattr(self, "_attack_context", None) is not None
+                and context != self._attack_context):
+            self._stop_attack_animation()
         if self._view_game is not self.session.game or self._view_location is None:
             self.view_facing = "north"
         elif location[:2] != self._view_location[:2]:
@@ -559,6 +580,7 @@ class DungeonWindow:
     def turn_view(self, steps: int) -> None:
         if self.session.game is None:
             return
+        self._stop_attack_animation()
         directions = ("north", "east", "south", "west")
         self.view_facing = directions[(directions.index(self.view_facing) + steps) % 4]
         self.refresh_view(self.session.get_state())
@@ -568,8 +590,81 @@ class DungeonWindow:
         if not self.view_state:
             self.view_canvas.delete(VIEW_TAG)
             return
+        view = self.view_state
+        frame = getattr(self, "_attack_frame", None)
+        event = getattr(self, "_attack_event", None)
+        if frame is not None and event is not None:
+            view = deepcopy(view)
+            enemy = event.get("enemy")
+            if enemy:
+                view["enemy"] = {**enemy, "archetype": foe_archetype(enemy["name"])}
+                view.update(in_combat=True, loot=False, note=False, portal=False)
         draw_dungeon_view(self.view_canvas, self.view_canvas.winfo_width(),
-                          self.view_canvas.winfo_height(), self.view_state)
+                          self.view_canvas.winfo_height(), view, animation=frame)
+
+    def _stop_attack_animation(self) -> None:
+        self._attack_token = getattr(self, "_attack_token", 0) + 1
+        timer = getattr(self, "_attack_after_id", None)
+        if timer is not None:
+            try:
+                self.root.after_cancel(timer)
+            except tk.TclError:
+                pass
+        self._attack_after_id = None
+        self._attack_queue = []
+        self._attack_event = None
+        self._attack_frame = None
+        self._attack_context = None
+
+        canvas = getattr(self, "view_canvas", None)
+        if canvas is not None:
+            try:
+                canvas.delete(FX_TAG)
+            except tk.TclError:
+                pass
+
+    def _play_attack_events(self, events: list[dict]) -> None:
+        if not events or self.screen != "dungeon" or not self.view_state:
+            return
+        location = self._view_location
+        if not location or location[1] != "dungeon":
+            return
+        self._attack_queue = [deepcopy(event) for event in events
+                              if event.get("floor") == location[0]
+                              and tuple(event.get("position", ())) == location[2]][:8]
+        if not self._attack_queue:
+            return
+        self._attack_context = (id(self.session.game), *location)
+        self._next_attack_event(self._attack_token)
+
+    def _next_attack_event(self, token: int) -> None:
+        if token != self._attack_token:
+            return
+        if not self._attack_queue:
+            self._stop_attack_animation()
+            self.draw_view()
+            return
+        self._attack_event = self._attack_queue.pop(0)
+        self._attack_step = 0
+        self._tick_attack_animation(token)
+
+    def _tick_attack_animation(self, token: int) -> None:
+        if token != self._attack_token or self._attack_event is None:
+            return
+        self._attack_after_id = None
+        context = (id(self.session.game), *self._view_location)
+        if self.screen != "dungeon" or context != self._attack_context:
+            self._stop_attack_animation()
+            self.draw_view()
+            return
+        self._attack_frame = animation_frame(self._attack_event, self._attack_step / 8)
+        self.draw_view()
+        if self._attack_step >= 8:
+            self._attack_after_id = self.root.after(40, lambda: self._next_attack_event(token))
+        else:
+            self._attack_step += 1
+            self._attack_after_id = self.root.after(ANIMATION_MS // 8,
+                                                  lambda: self._tick_attack_animation(token))
 
     def draw_map(self) -> None:
         self.map_canvas.delete("all")
@@ -613,6 +708,7 @@ class DungeonWindow:
     def new_adventure(self) -> None:
         if self.session.game is None or not self.session.game.over:
             return
+        self._stop_attack_animation()
         self.session = DesktopSession(seed=self.seed, floors=self.floors)
         self.name_var.set(self.session.name)
         self.class_var.set(self.session.class_id)
@@ -653,6 +749,20 @@ def run_gui_smoke(report_path: Path, name: str = "Adventurer", seed: int | None 
         root.report_callback_exception = lambda kind, error, trace: errors.append(str(error))
         app = DungeonWindow(root, DesktopSession(name=name, seed=seed, floors=floors))
         root.update()
+
+        def wait_for_animation(predicate, message):
+            ready = tk.BooleanVar(root, False)
+            deadline = monotonic() + 12
+            def poll():
+                if predicate() or errors or monotonic() >= deadline:
+                    ready.set(True)
+                else:
+                    root.after(15, poll)
+            poll()
+            if not ready.get():
+                root.wait_variable(ready)
+            assert not errors, errors
+            assert predicate(), message
 
         def assert_text_tag(text, tag):
             index = app.terminal.search(text, "1.0", stopindex="end", exact=True)
@@ -841,6 +951,21 @@ def run_gui_smoke(report_path: Path, name: str = "Adventurer", seed: int | None 
         assert "Sneak Attack:" in app.terminal.get("1.0", "end")
         assert app.class_action.cget("text") == "Hide"
         checks.append("rogue_opening_sneak")
+        resolved_state, resolved_calls = game.get_state(), list(game.rng.calls)
+        wait_for_animation(lambda: bool(app._attack_frame and app._attack_frame["progress"] >= .5),
+                           "The resolved weapon attack did not reach its impact frame.")
+        assert app._attack_frame["kind"] == "weapon" and app._attack_frame["damage"] == expected_damage
+        assert app.view_canvas.find_withtag("fx-weapon") and app.view_canvas.find_withtag("view-enemy")
+        assert app._attack_frame["enemy_dx"] != 0 and app._attack_frame["hands_angle"] != 0
+        checks.append("weapon_swing_reaction")
+        wait_for_animation(lambda: app._attack_after_id is None, "The weapon animation did not finish.")
+        assert app._attack_frame is None and not app.view_canvas.find_withtag(FX_TAG)
+        assert game.get_state() == resolved_state and game.rng.calls == resolved_calls
+        app.action_buttons["look"].invoke()
+        root.update()
+        assert app._attack_after_id is None and not app.view_canvas.find_withtag(FX_TAG)
+        assert game.get_state() == resolved_state and game.rng.calls == resolved_calls
+        checks.append("animation_gameplay_purity")
         root.geometry("960x740")
         root.update()
         for widget in (app.view_canvas, app.terminal, app.turn_left_button, app.turn_right_button,
@@ -1018,6 +1143,33 @@ def run_gui_smoke(report_path: Path, name: str = "Adventurer", seed: int | None 
         picture(sample, "mira")
         assert gear_game.get_state() == protected_state and gear_game.rng.getstate() == protected_rng
         checks.append("realistic_sanctuary")
+
+        # Drive a real Wizard attack through the same widgets, including a
+        # dying foe retained briefly after the engine has cleared the room.
+        wizard = Game(name="Spell tester", seed=7, class_id="wizard")
+        wizard.room.enemy = Enemy("Bone Sentry", 1, 1, 1, 3, (1, 6), 1, 50, 3)
+        wizard.room.looted = False
+        wizard.room.loot = Loot(gold=5)
+        wizard.rng = __import__("random").Random(5)
+        app.session.game = wizard
+        app.refresh_dungeon()
+        root.update()
+        app.action_buttons["attack"].invoke()
+        root.update()
+        assert wizard.enemy is None and app._attack_event["kind"] == "firebolt"
+        assert app._attack_frame["pose"] == "collapse" and app.view_canvas.find_withtag("view-enemy")
+        assert not app.view_canvas.find_withtag("view-loot")
+        spell_state, spell_rng = wizard.get_state(), wizard.rng.getstate()
+        wait_for_animation(lambda: bool(app._attack_frame and app._attack_frame["progress"] >= .375),
+                           "The Wizard projectile did not advance.")
+        assert app.view_canvas.find_withtag("fx-spell")
+        checks.append("wizard_spell_effect")
+        wait_for_animation(lambda: app._attack_after_id is None, "The defeat reaction did not finish.")
+        assert not app.view_canvas.find_withtag("view-enemy") and app.view_canvas.find_withtag("view-loot")
+        assert not app.view_canvas.find_withtag(FX_TAG)
+        assert wizard.get_state() == spell_state and wizard.rng.getstate() == spell_rng
+        checks.append("animated_defeat_cleanup")
+
         app.session.game = adventure_game
         app.refresh_dungeon()
         # A real enemy strike must end the run and enable a clean restart.
@@ -1042,6 +1194,7 @@ def run_gui_smoke(report_path: Path, name: str = "Adventurer", seed: int | None 
         assert "You die in the catacombs at 0 HP" in app.terminal.get("1.0", "end")
         assert "Death save:" not in app.terminal.get("1.0", "end")
         assert app.restart_button.instate(["!disabled"])
+        assert app._attack_after_id is not None
         checks.append("instant_death")
         dead_state = game.get_state()
         app.action_buttons["potion"].invoke()
@@ -1053,6 +1206,8 @@ def run_gui_smoke(report_path: Path, name: str = "Adventurer", seed: int | None 
         assert app.screen == "title" and app.session.game is None and app.session.rolls is None
         assert not app.history and not app.terminal.get("1.0", "end").strip()
         assert not app.view_state and not app.view_canvas.find_withtag(VIEW_TAG)
+        assert app._attack_after_id is None and not app.view_canvas.find_withtag(FX_TAG)
+        checks.append("animation_restart_cleanup")
         checks.append("new_adventure")
         assert not errors, errors
         report["success"] = True

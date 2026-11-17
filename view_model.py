@@ -20,7 +20,7 @@ def _position(value):
     return None
 
 
-def _foe_archetype(name: str) -> str:
+def foe_archetype(name: str) -> str:
     """Choose an original generic silhouette from an already visible name."""
     name = name.casefold()
     groups = (
@@ -111,7 +111,7 @@ def first_person_data(state: dict, facing: str = "north") -> dict:
         name = enemy.get("name")
         name = name if isinstance(name, str) and name else "Unknown foe"
         result["enemy"] = {"name": name, "boss": bool(enemy.get("boss", False)),
-                           "archetype": _foe_archetype(name)}
+                           "archetype": foe_archetype(name)}
         result["in_combat"] = not dead and not bool(state.get("over", False))
         return result
 
